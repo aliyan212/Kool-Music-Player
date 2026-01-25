@@ -336,6 +336,7 @@ class MiniPlayer extends StatelessWidget {
     return StreamBuilder<int?>(
       stream: player.currentIndexStream,
       builder: (context, snapshot) {
+        //
         final index = snapshot.data;
         if (index == null || songs.isEmpty || index >= songs.length) return const SizedBox.shrink();
         final song = songs[index];
