@@ -1,14 +1,23 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'dart:typed_data';
 import 'package:audiotags/audiotags.dart';
 import 'dart:math' as math;
+import 'package:audio_service/audio_service.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.example.music_player.channel.audio',
+    androidNotificationChannelName: 'Music playback',
+    androidNotificationOngoing: true,
+  );
   runApp(const MyApp());
 }
 
@@ -58,6 +67,27 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isLoading = true;
   ConcatenatingAudioSource? _currentPlaylist;
 
+  MediaItem _toMediaItem(SongModel song) {
+    final durationMs = song.duration;
+    final artUri = (song.albumId != null && song.albumId! > 0)
+        ? Uri.parse('content://media/external/audio/albumart/${song.albumId}')
+        : null;
+
+    return MediaItem(
+      id: song.id.toString(),
+      title: song.title,
+      artist: song.artist,
+      album: song.album,
+      duration: durationMs != null ? Duration(milliseconds: durationMs) : null,
+      artUri: artUri,
+      extras: {
+        'songId': song.id,
+        'path': song.data,
+        'albumId': song.albumId,
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -71,7 +101,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void requestPermission() async {
-    await [Permission.audio, Permission.storage].request();
+    await [Permission.audio, Permission.storage, Permission.notification].request();
     if (await Permission.manageExternalStorage.request().isGranted) {}
     loadMusic();
   }
@@ -87,7 +117,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
       _currentPlaylist = ConcatenatingAudioSource(
         children: processedSongs.map((song) {
-          return AudioSource.uri(Uri.parse(song.data), tag: song);
+          return AudioSource.uri(Uri.file(song.data), tag: _toMediaItem(song));
         }).toList(),
       );
 
@@ -157,7 +187,7 @@ class _MyHomePageState extends State<MyHomePage> {
             context,
             PageRouteBuilder(
               opaque: false,
-              pageBuilder: (_, __, ___) => NowPlayingPage(player: _player, song: song),
+              pageBuilder: (_, __, ___) => NowPlayingPage(player: _player, song: song, songs: _songs),
               transitionsBuilder: (context, animation, secondaryAnimation, child) {
                 var tween = Tween(begin: const Offset(0.0, 1.0), end: Offset.zero).chain(CurveTween(curve: Curves.easeOutCubic));
                 return SlideTransition(position: animation.drive(tween), child: child);
@@ -476,7 +506,8 @@ class SquigglePainter extends CustomPainter {
 class NowPlayingPage extends StatefulWidget {
   final AudioPlayer player;
   final SongModel song;
-  const NowPlayingPage({super.key, required this.player, required this.song});
+  final List<SongModel> songs;
+  const NowPlayingPage({super.key, required this.player, required this.song, required this.songs});
   @override
   State<NowPlayingPage> createState() => _NowPlayingPageState();
 }
@@ -490,6 +521,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   List<LyricLine> _lrcLines = [];
   bool _isSynced = false;
   int _currentLyricIndex = -1;
+  StreamSubscription<int?>? _indexSub;
 
   @override
   void initState() {
@@ -499,20 +531,28 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     Future.delayed(const Duration(milliseconds: 220), () {
       if (mounted) _updatePalette(_displayedSong.id);
     });
-    widget.player.sequenceStateStream.listen((state) {
-      if (state?.currentSource != null) {
-        final newSong = state!.currentSource!.tag as SongModel;
-        if (newSong.id != _displayedSong.id) {
-          setState(() { _displayedSong = newSong; _showLyrics = false; _currentLyricIndex = -1; });
-          _updatePalette(newSong.id);
-          _loadLyrics();
-        }
-      }
+
+    _indexSub = widget.player.currentIndexStream.listen((index) {
+      if (!mounted) return;
+      if (index == null || index < 0 || index >= widget.songs.length) return;
+      final newSong = widget.songs[index];
+      if (newSong.id == _displayedSong.id) return;
+      setState(() {
+        _displayedSong = newSong;
+        _showLyrics = false;
+        _currentLyricIndex = -1;
+      });
+      _updatePalette(newSong.id);
+      _loadLyrics();
     });
   }
 
   @override
-  void dispose() { _lyricScrollController.dispose(); super.dispose(); }
+  void dispose() {
+    _indexSub?.cancel();
+    _lyricScrollController.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadLyrics() async {
     setState(() { _rawLyrics = null; _lrcLines = []; _isSynced = false; _currentLyricIndex = -1; });
