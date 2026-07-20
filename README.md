@@ -1,16 +1,40 @@
 # music_player
 
-A new Flutter project.
+A Flutter music player focused on on-device playback.
 
-## Getting Started
+This app scans your local music library, lets you browse by songs/albums/artists, and plays audio via `just_audio` + `audio_service` (background playback + media controls).
 
-This project is a starting point for a Flutter application.
+## Features
 
-A few resources to get you started if this is your first Flutter project:
+- Library browsing: songs, albums, artists
+- Search across library
+- Background playback with system media controls / notifications
+- Queue + mini player
+- Lyrics support (plain text + synced LRC)
+- Basic tag editing (title/artist/album/cover art)
+- Dynamic colors (Material You on supported Android devices + artwork palette)
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Platform notes
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Android is the primary target.
+- Web builds: tag/cover editing is disabled (no direct file access).
+- Desktop builds: playback works, but library scanning behavior may vary depending on platform/file access.
+
+## Permissions
+
+- Library scanning uses Android runtime permissions (`Permission.audio` / `Permission.storage`).
+- Android 13+: the app may request notification permission so media controls can appear.
+- Tag editing on Android 11+: writing tags typically requires “All files access” (`MANAGE_EXTERNAL_STORAGE`).
+
+## Run locally
+
+Prereqs: Flutter SDK installed.
+
+```bash
+flutter pub get
+flutter run
+```
+
+## Project structure
+
+`lib/main.dart` is the app entrypoint. Larger UI/components are being split into `lib/dialogs/`, `lib/widgets/`, and `lib/utils/` to keep changes reviewable.
