@@ -1,6 +1,7 @@
 
-import 'package:flutter/material.dart';
-import '../main.dart'; // We will refine imports later
+import 'dart:math' as math;
+
+import 'package:audiotags/audiotags.dart';
 
 
 class LyricLine {

@@ -1,6 +1,20 @@
 
+import 'dart:async';
+import 'dart:collection';
+import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui';
+
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import '../main.dart'; // We will refine imports later
+import 'package:flutter/services.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:on_audio_query/on_audio_query.dart';
+import 'package:palette_generator/palette_generator.dart';
+
+import '../android_notifications.dart';
+import '../main.dart';
+import '../pages/queue_page.dart';
 
 
 class MiniPlayer extends StatefulWidget {
@@ -127,8 +141,8 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
     if (cachedColor != null) {
       _bgColor = cachedColor;
     }
-    if (_hasCachedArtworkBytes(widget.song.id)) {
-      _artworkBytes = _peekCachedArtworkBytes(widget.song.id);
+    if (hasCachedArtworkBytes(widget.song.id)) {
+      _artworkBytes = peekCachedArtworkBytes(widget.song.id);
     }
     _scheduleUpdateColor();
     _scheduleUpdateArtwork(delay: Duration.zero);
@@ -142,8 +156,8 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
       if (cachedColor != null) {
         _bgColor = cachedColor;
       }
-      if (_hasCachedArtworkBytes(widget.song.id)) {
-        _artworkBytes = _peekCachedArtworkBytes(widget.song.id);
+      if (hasCachedArtworkBytes(widget.song.id)) {
+        _artworkBytes = peekCachedArtworkBytes(widget.song.id);
       }
       _scheduleUpdateColor();
       _scheduleUpdateArtwork();
@@ -198,7 +212,7 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
 
   Future<void> _updateArtwork(int songId, int token) async {
     try {
-      final bytes = await _queryArtworkBytesCached(songId, size: 300);
+      final bytes = await queryArtworkBytesCached(songId, size: 300);
       if (!mounted) return;
       if (token != _artworkToken) return;
       if (songId != widget.song.id) return;
@@ -224,7 +238,7 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
         return;
       }
 
-      final bytes = await _queryArtworkBytesCached(songId, size: 220);
+      final bytes = await queryArtworkBytesCached(songId, size: 220);
 
       if (!mounted) return;
       if (token != _colorToken) return;

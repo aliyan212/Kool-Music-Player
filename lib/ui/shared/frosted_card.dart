@@ -3,7 +3,7 @@ import 'dart:ui';
 
 class FrostedCard extends StatelessWidget {
   final Widget child;
-  const _FrostedCard({required this.child});
+  const FrostedCard({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {

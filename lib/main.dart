@@ -2,8 +2,6 @@ import 'data/models/album_stat.dart';
 import 'data/models/sort_mode.dart';
 import 'data/models/isolate_data.dart';
 import 'data/models/user_playlist.dart';
-library music_player_app;
-
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -26,12 +24,16 @@ import 'package:file_picker/file_picker.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter/rendering.dart';
+import 'core/theme/app_theme.dart';
 import 'app_audio_handler.dart';
 import 'android_notifications.dart';
 import 'platform_exit.dart';
 import 'services/app_local_store.dart';
+import 'data/services/caching_service.dart';
 import 'utils/file_ops.dart';
 import 'utils/palette_compute.dart';
+import 'ui/shared/frosted_card.dart';
+import 'ui/shared/squiggly_seek_bar.dart';
 import 'widgets/now_playing_transport.dart';
 
 import 'dialogs/lyrics_editor_dialog.dart';
@@ -47,9 +49,9 @@ Future<AppAudioHandler>? _audioHandlerInitFuture;
 
 final ValueNotifier<bool> appIsForeground = ValueNotifier<bool>(true);
 int _autoExitSuppressCount = 0;
-bool get _suppressAutoExit => _autoExitSuppressCount > 0;
-void _pushAutoExitSuppress() => _autoExitSuppressCount++;
-void _popAutoExitSuppress() {
+bool get suppressAutoExit => _autoExitSuppressCount > 0;
+void pushAutoExitSuppress() => _autoExitSuppressCount++;
+void popAutoExitSuppress() {
   if (_autoExitSuppressCount > 0) _autoExitSuppressCount--;
 }
 
@@ -300,11 +302,6 @@ String formatTime(int? milliseconds) {
   int seconds = totalSeconds % 60;
   return "$minutes:${seconds.toString().padLeft(2, '0')}";
 }
-
-final LinkedHashMap<String, Uint8List?> CachingService().thumbnailCache =
-    LinkedHashMap<String, Uint8List?>();
-final LinkedHashMap<String, Uint8List?> CachingService().highResCache =
-    LinkedHashMap<String, Uint8List?>();
 const int _thumbnailCacheMax = 300;
 const int _highResCacheMax = 10;
 
@@ -333,7 +330,7 @@ void _storeCachedArtworkBytesByKey(String key, int size, Uint8List? bytes) {
   }
 }
 
-bool _hasCachedArtworkBytes(
+bool hasCachedArtworkBytes(
   int id, {
   ArtworkType type = ArtworkType.AUDIO,
   int size = 200,
@@ -341,7 +338,7 @@ bool _hasCachedArtworkBytes(
   return _artworkCacheForSize(size).containsKey(_getArtworkKey(id, type, size));
 }
 
-Uint8List? _peekCachedArtworkBytes(
+Uint8List? peekCachedArtworkBytes(
   int id, {
   ArtworkType type = ArtworkType.AUDIO,
   int size = 200,
@@ -349,7 +346,7 @@ Uint8List? _peekCachedArtworkBytes(
   return _peekCachedArtworkBytesByKey(_getArtworkKey(id, type, size), size);
 }
 
-Future<Uint8List?> _queryArtworkBytesCached(
+Future<Uint8List?> queryArtworkBytesCached(
   int id,
   {
   ArtworkType type = ArtworkType.AUDIO,
@@ -413,12 +410,12 @@ class _FastArtworkWidgetState extends State<FastArtworkWidget> {
 
   void _fetchArtwork() {
     final key = _getArtworkKey(widget.id, widget.type, widget.size);
-    if (_hasCachedArtworkBytes(widget.id, type: widget.type, size: widget.size)) {
-      _bytes = _peekCachedArtworkBytes(widget.id, type: widget.type, size: widget.size);
+    if (hasCachedArtworkBytes(widget.id, type: widget.type, size: widget.size)) {
+      _bytes = peekCachedArtworkBytes(widget.id, type: widget.type, size: widget.size);
       return;
     }
 
-    _queryArtworkBytesCached(
+    queryArtworkBytesCached(
       widget.id,
       type: widget.type,
       size: widget.size,
@@ -1994,7 +1991,7 @@ void _recomputeAllData() {
       if (_hasStartedPlayback &&
           state.processingState == ProcessingState.idle &&
           defaultTargetPlatform == TargetPlatform.android &&
-          !_suppressAutoExit) {
+          !suppressAutoExit) {
         SystemNavigator.pop();
       }
     });
@@ -2550,33 +2547,33 @@ void _recordPlayForSongId(int songId) {
 
     _suppressIndexUpdates = true;
     try {
-      _pushAutoExitSuppress();
+      pushAutoExitSuppress();
       if (shouldSuspend) handler.setStateBroadcastSuspended(true);
-      await _detachPlayerForTagWrite(_player).timeout(
-        _tagDetachTimeout,
+      await detachPlayerForTagWrite(_player).timeout(
+        tagDetachTimeout,
         onTimeout: () {
           debugPrint('Timed out detaching player for tag write.');
         },
       );
 
       await action().timeout(
-        _tagWriteTimeout,
+        tagWriteTimeout,
         onTimeout: () {
           throw TimeoutException('Tag write timed out. Please try again.');
         },
       );
     } finally {
-      _popAutoExitSuppress();
+      popAutoExitSuppress();
       if (shouldSuspend) handler.setStateBroadcastSuspended(false);
       try {
-        await _restorePlayerAfterTagWrite(
+        await restorePlayerAfterTagWrite(
           _player,
           restoreSource,
           index,
           pos,
           wasPlaying,
         ).timeout(
-          _tagRestoreTimeout,
+          tagRestoreTimeout,
           onTimeout: () {
             debugPrint('Timed out restoring playback after tag write.');
           },
@@ -8820,13 +8817,13 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   void initState() {
     super.initState();
     _displayedSong = widget.song;
-    if (_hasCachedArtworkBytes(_displayedSong.id, size: 900)) {
-      _displayedArtworkBytes = _peekCachedArtworkBytes(
+    if (hasCachedArtworkBytes(_displayedSong.id, size: 900)) {
+      _displayedArtworkBytes = peekCachedArtworkBytes(
         _displayedSong.id,
         size: 900,
       );
-    } else if (_hasCachedArtworkBytes(_displayedSong.id, size: 200)) {
-      _displayedArtworkBytes = _peekCachedArtworkBytes(
+    } else if (hasCachedArtworkBytes(_displayedSong.id, size: 200)) {
+      _displayedArtworkBytes = peekCachedArtworkBytes(
         _displayedSong.id,
         size: 200,
       );
@@ -8906,19 +8903,19 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
       if (newSong == null || newSong.id == _displayedSong.id) return;
 
-      final hasHighRes = _hasCachedArtworkBytes(newSong.id, size: 900);
-      final hasLowRes = _hasCachedArtworkBytes(newSong.id, size: 200);
+      final hasHighRes = hasCachedArtworkBytes(newSong.id, size: 900);
+      final hasLowRes = hasCachedArtworkBytes(newSong.id, size: 200);
 
       HapticFeedback.mediumImpact();
       setState(() {
         _displayedSong = newSong!;
         if (hasHighRes) {
-          _displayedArtworkBytes = _peekCachedArtworkBytes(
+          _displayedArtworkBytes = peekCachedArtworkBytes(
             newSong.id,
             size: 900,
           );
         } else if (hasLowRes) {
-          _displayedArtworkBytes = _peekCachedArtworkBytes(
+          _displayedArtworkBytes = peekCachedArtworkBytes(
             newSong.id,
             size: 200,
           );
@@ -9028,7 +9025,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   Future<void> _updateArtworkBytes(int songId, int token) async {
     try {
-      final bytes = await _queryArtworkBytesCached(
+      final bytes = await queryArtworkBytesCached(
         songId,
         type: ArtworkType.AUDIO,
         size: 900,
@@ -9332,7 +9329,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
         return;
       }
 
-      Uint8List? bytes = await _queryArtworkBytesCached(
+      Uint8List? bytes = await queryArtworkBytesCached(
         songId,
         type: ArtworkType.AUDIO,
         size: 200,
@@ -10032,7 +10029,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                     song: _displayedSong,
                                     onSaved: _reloadDisplayedSongMetadata,
                                     runWithPlaybackSuspended: (action) =>
-                                        _runWithPlayerPlaybackSuspended(
+                                        runWithPlayerPlaybackSuspended(
                                           widget.player,
                                           widget.playlist,
                                           action,
@@ -10050,7 +10047,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                     currentLyrics: _rawLyrics,
                                     onSaved: () => _loadLyrics(),
                                     runWithPlaybackSuspended: (action) =>
-                                        _runWithPlayerPlaybackSuspended(
+                                        runWithPlayerPlaybackSuspended(
                                           widget.player,
                                           widget.playlist,
                                           action,

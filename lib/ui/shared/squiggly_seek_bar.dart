@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
 
 class SquigglySeekBar extends StatefulWidget {
   final Duration position;
@@ -17,6 +19,135 @@ class SquigglySeekBar extends StatefulWidget {
   });
   @override
   State<SquigglySeekBar> createState() => _SquigglySeekBarState();
+}
+
+class _SquigglySeekBarState extends State<SquigglySeekBar>
+    with TickerProviderStateMixin {
+  late AnimationController _animController;
+  late AnimationController _seekBackController;
+  double? _dragProgress;
+  double _smoothProgress = 0.0;
+  double _seekBackFrom = 0.0;
+  double _seekBackTo = 0.0;
+
+  static const Duration _animateBackMinDelta = Duration(seconds: 2);
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    );
+    _seekBackController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _seekBackController.addListener(() {
+      if (!mounted) return;
+      if (_dragProgress != null) return;
+      final t = Curves.easeOutCubic.transform(_seekBackController.value);
+      final v = lerpDouble(_seekBackFrom, _seekBackTo, t) ?? _seekBackTo;
+      setState(() => _smoothProgress = v);
+    });
+    if (widget.isPlaying) _animController.repeat();
+
+    final denom = widget.duration.inMilliseconds == 0
+        ? 1
+        : widget.duration.inMilliseconds;
+    _smoothProgress = (widget.position.inMilliseconds / denom).clamp(0.0, 1.0);
+  }
+
+  @override
+  void didUpdateWidget(covariant SquigglySeekBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isPlaying && !_animController.isAnimating) {
+      _animController.repeat();
+    } else if (!widget.isPlaying && _animController.isAnimating) {
+      _animController.stop();
+    }
+
+    if (_dragProgress != null) return;
+
+    final denom = widget.duration.inMilliseconds == 0
+        ? 1
+        : widget.duration.inMilliseconds;
+    final newActual = (widget.position.inMilliseconds / denom).clamp(0.0, 1.0);
+
+    final isBackwards = widget.position < oldWidget.position;
+    final backDelta = oldWidget.position - widget.position;
+    final shouldAnimateBack = isBackwards && backDelta >= _animateBackMinDelta;
+
+    if (!shouldAnimateBack) {
+      _seekBackController.stop();
+      _smoothProgress = newActual;
+      return;
+    }
+
+    _seekBackController.stop();
+    _seekBackFrom = _smoothProgress;
+    _seekBackTo = newActual;
+    _seekBackController.forward(from: 0.0);
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    _seekBackController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = _dragProgress ?? _smoothProgress;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (details) {
+            _seekBackController.stop();
+            final box = context.findRenderObject() as RenderBox;
+            final localPos = box.globalToLocal(details.globalPosition);
+            _dragProgress = (localPos.dx / constraints.maxWidth).clamp(0.0, 1.0);
+            setState(() {});
+          },
+          onHorizontalDragUpdate: (details) {
+            final box = context.findRenderObject() as RenderBox;
+            final localPos = box.globalToLocal(details.globalPosition);
+            _dragProgress = (localPos.dx / constraints.maxWidth).clamp(0.0, 1.0);
+            setState(() {});
+          },
+          onHorizontalDragEnd: (_) {
+            final targetProgress = _dragProgress ?? _smoothProgress;
+            _dragProgress = null;
+            final target = Duration(
+              milliseconds:
+                  (widget.duration.inMilliseconds * targetProgress).round(),
+            );
+            widget.onChanged(target);
+            setState(() {});
+          },
+          child: SizedBox(
+            height: 20,
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_animController, _seekBackController]),
+              builder: (context, _) {
+                return CustomPaint(
+                  painter: SquigglePainter(
+                    progress: progress,
+                    phase: _animController.value * 2 * math.pi,
+                    color: widget.isDark ? Colors.white : Colors.black87,
+                    baseColor: widget.isDark ? Colors.white24 : Colors.black26,
+                  ),
+                  child: const SizedBox.expand(),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class SquigglePainter extends CustomPainter {

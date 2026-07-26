@@ -48,7 +48,7 @@ class ThemeNotifier extends ValueNotifier<ThemeMode> {
   }
 }
 
-ThemeData _buildTheme(ColorScheme scheme, Brightness brightness) {
+ThemeData buildTheme(ColorScheme scheme, Brightness brightness) {
     final base = ThemeData(
       useMaterial3: true,
       brightness: brightness,

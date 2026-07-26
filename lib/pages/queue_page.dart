@@ -1,6 +1,14 @@
 
+import 'dart:async';
+import 'dart:ui';
+
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import '../main.dart'; // We will refine imports later
+import 'package:flutter/services.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:on_audio_query/on_audio_query.dart';
+
+import '../main.dart';
 
 
 class QueuePage extends StatefulWidget {

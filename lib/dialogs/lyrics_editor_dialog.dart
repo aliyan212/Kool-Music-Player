@@ -1,6 +1,13 @@
 
+import 'package:audiotags/audiotags.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../main.dart'; // We will refine imports later
+import 'package:flutter/services.dart';
+import 'package:on_audio_query/on_audio_query.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+import '../utils/lyrics.dart';
+import '../utils/tag_write_access.dart';
 
 
 class LyricsEditorDialog extends StatefulWidget {
@@ -46,7 +53,7 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
   }
 
   Future<void> _saveLyrics() async {
-    final ok = await _ensureTagWriteAccess(context, widget.song.data);
+    final ok = await ensureTagWriteAccess(context, widget.song.data);
     if (!ok) return;
 
     setState(() => _isSaving = true);
@@ -74,7 +81,7 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
           bpm: tag?.bpm,
         );
 
-        await _writeTagsSafelyWithBackup(
+        await writeTagsSafelyWithBackup(
           widget.song.data,
           newTag,
           verify: () async {
@@ -98,7 +105,7 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
           await OnAudioQuery()
               .scanMedia(widget.song.data)
               .timeout(
-                _tagScanTimeout,
+                tagScanTimeout,
                 onTimeout: () {
                   debugPrint('Timed out scanning media after lyrics write.');
                   return false;

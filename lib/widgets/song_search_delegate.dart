@@ -1,6 +1,9 @@
 
 import 'package:flutter/material.dart';
-import '../main.dart'; // We will refine imports later
+import 'package:flutter/services.dart';
+import 'package:on_audio_query/on_audio_query.dart';
+
+import '../main.dart';
 
 
 class SongSearchDelegate extends SearchDelegate {

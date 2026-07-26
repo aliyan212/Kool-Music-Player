@@ -1,14 +1,23 @@
 
+import 'dart:async';
+
+import 'package:audiotags/audiotags.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../main.dart'; // We will refine imports later
+import 'package:just_audio/just_audio.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+import '../main.dart';
+import 'file_ops.dart';
 
 
-const Duration _tagWriteTimeout = Duration(seconds: 12);
-const Duration _tagDetachTimeout = Duration(milliseconds: 2500);
-const Duration _tagRestoreTimeout = Duration(seconds: 4);
-const Duration _tagScanTimeout = Duration(milliseconds: 3500);
+const Duration tagWriteTimeout = Duration(seconds: 12);
+const Duration tagDetachTimeout = Duration(milliseconds: 2500);
+const Duration tagRestoreTimeout = Duration(seconds: 4);
+const Duration tagScanTimeout = Duration(milliseconds: 3500);
 
-Future<void> _writeTagsSafelyWithBackup(
+Future<void> writeTagsSafelyWithBackup(
   String path,
   Tag tag, {
   required Future<bool> Function() verify,
@@ -43,7 +52,7 @@ Future<void> _writeTagsSafelyWithBackup(
   }
 }
 
-Future<void> _detachPlayerForTagWrite(AudioPlayer player) async {
+Future<void> detachPlayerForTagWrite(AudioPlayer player) async {
   try {
     await player.pause();
   } catch (_) {}
@@ -61,7 +70,7 @@ Future<void> _detachPlayerForTagWrite(AudioPlayer player) async {
   await Future<void>.delayed(const Duration(milliseconds: 150));
 }
 
-Future<void> _restorePlayerAfterTagWrite(
+Future<void> restorePlayerAfterTagWrite(
   AudioPlayer player,
   AudioSource? restoreSource,
   int? index,
@@ -79,7 +88,7 @@ Future<void> _restorePlayerAfterTagWrite(
   }
 }
 
-Future<void> _runWithPlayerPlaybackSuspended(
+Future<void> runWithPlayerPlaybackSuspended(
   AudioPlayer player,
   AudioSource? playlist,
   Future<void> Function() action,
@@ -99,33 +108,33 @@ Future<void> _runWithPlayerPlaybackSuspended(
   final pos = player.position;
 
   try {
-    _pushAutoExitSuppress();
+    pushAutoExitSuppress();
     if (shouldSuspend) handler.setStateBroadcastSuspended(true);
-    await _detachPlayerForTagWrite(player).timeout(
-      _tagDetachTimeout,
+    await detachPlayerForTagWrite(player).timeout(
+      tagDetachTimeout,
       onTimeout: () {
         debugPrint('Timed out detaching player for tag write.');
       },
     );
 
     await action().timeout(
-      _tagWriteTimeout,
+      tagWriteTimeout,
       onTimeout: () {
         throw TimeoutException('Tag write timed out. Please try again.');
       },
     );
   } finally {
-    _popAutoExitSuppress();
+    popAutoExitSuppress();
     if (shouldSuspend) handler.setStateBroadcastSuspended(false);
     try {
-      await _restorePlayerAfterTagWrite(
+      await restorePlayerAfterTagWrite(
         player,
         restoreSource,
         index,
         pos,
         wasPlaying,
       ).timeout(
-        _tagRestoreTimeout,
+        tagRestoreTimeout,
         onTimeout: () {
           debugPrint('Timed out restoring playback after tag write.');
         },
@@ -137,7 +146,7 @@ Future<void> _runWithPlayerPlaybackSuspended(
   }
 }
 
-Future<bool> _ensureTagWriteAccess(BuildContext context, String data) async {
+Future<bool> ensureTagWriteAccess(BuildContext context, String data) async {
   if (kIsWeb) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
