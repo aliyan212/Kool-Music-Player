@@ -8,7 +8,7 @@ import 'package:just_audio/just_audio.dart';
 ///
 /// Keep this file minimal and reliable: it should never block app startup.
 class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
-  AppAudioHandler() {
+  AppAudioHandler(this.player) {
     // Best-effort: configure audio focus/interruptions.
     // Do not block app startup on this.
     unawaited(_initAudioSession());
@@ -36,7 +36,7 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _broadcastState();
   }
 
-  final AudioPlayer player = AudioPlayer();
+  final AudioPlayer player;
 
   static const Duration _restartTrackThreshold = Duration(seconds: 10);
 

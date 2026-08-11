@@ -29,6 +29,7 @@ import 'app_audio_handler.dart';
 import 'android_notifications.dart';
 import 'platform_exit.dart';
 import 'services/app_local_store.dart';
+import 'services/playback_controller.dart';
 import 'data/services/caching_service.dart';
 import 'utils/file_ops.dart';
 import 'utils/palette_compute.dart';
@@ -45,7 +46,7 @@ import 'widgets/mini_player.dart';
 import 'widgets/song_search_delegate.dart';
 
 AppAudioHandler? audioHandler;
-Future<AppAudioHandler>? _audioHandlerInitFuture;
+Future<AudioHandler>? _audioHandlerInitFuture;
 
 final ValueNotifier<bool> appIsForeground = ValueNotifier<bool>(true);
 int _autoExitSuppressCount = 0;
@@ -200,11 +201,11 @@ class _BootAppState extends State<_BootApp> {
             defaultTargetPlatform == TargetPlatform.linux ||
             defaultTargetPlatform == TargetPlatform.windows ||
             defaultTargetPlatform == TargetPlatform.macOS) {
-          audioHandler = AppAudioHandler();
+          audioHandler = AppAudioHandler(playbackController.player);
         } else {
           _audioHandlerInitFuture ??= () async {
             return await AudioService.init(
-              builder: () => AppAudioHandler(),
+              builder: () => AppAudioHandler(playbackController.player),
               config: const AudioServiceConfig(
                 androidNotificationChannelId:
                     'com.example.music_player.channel.audio',
@@ -215,7 +216,7 @@ class _BootAppState extends State<_BootApp> {
             );
           }();
 
-          audioHandler = await _audioHandlerInitFuture!;
+          audioHandler = await _audioHandlerInitFuture! as AppAudioHandler;
         }
       }
 
@@ -492,7 +493,7 @@ Widget buildDetailBottomBars({
       mainAxisSize: MainAxisSize.min,
       children: [
         MiniPlayer(
-          player: player,
+          controller: playbackController,
           songs: songs,
           currentIndex: currentIndex,
           playlist: playlist,
@@ -675,13 +676,11 @@ enum _AppMenuAction {
 enum _LibraryPermissionState { unknown, granted, denied, permanentlyDenied }
 
 class _MyHomePageState extends State<MyHomePage> {
+  final PlaybackController _controller = playbackController;
   final AppLocalStore _localStore = AppLocalStore.instance;
   final ScrollController _scrollController = ScrollController();
-  late final AudioPlayer _player;
   final OnAudioQuery _audioQuery = OnAudioQuery();
   final SearchController _searchController = SearchController();
-
-  bool _ownsPlayer = false;
 
   bool _showSearchInAppBar = false;
 
@@ -693,36 +692,11 @@ class _MyHomePageState extends State<MyHomePage> {
   List<SongModel> _songs = [];
   bool _isLoading = true;
   _LibraryPermissionState _permissionState = _LibraryPermissionState.unknown;
-  ConcatenatingAudioSource? _currentPlaylist;
-  int? _currentPlayIndex;
-  int? _currentSongId;
-  final ValueNotifier<int?> _currentPlayIndexNotifier = ValueNotifier<int?>(
-    null,
-  );
-  final ValueNotifier<int?> _currentSongIdNotifier = ValueNotifier<int?>(null);
-  StreamSubscription<int?>? _currentIndexSub;
-  StreamSubscription<SequenceState?>? _sequenceStateSub;
-  StreamSubscription<PlayerState>? _playerStateSub;
-  bool _hasStartedPlayback = false;
-  SortMode _sortMode = SortMode.albumArtistYear;
   AlbumArtistsSort _albumArtistsSort = AlbumArtistsSort.nameAsc;
   AlbumsSort _albumsSort = AlbumsSort.titleAsc;
-  bool _suppressIndexUpdates = false;
   List<String> _allFolders = [];
   Set<String> _includedFolders = {};
   Set<String> _excludedFolders = {};
-  Map<int, AlbumModel> _albumMap = {};
-
-  final Map<int, int> _playCountBySongId = <int, int>{};
-  final Map<int, int> _lastPlayedMsBySongId = <int, int>{};
-  final Map<int, int> _lastRecordedPlayMsBySongId = <int, int>{};
-  Timer? _playHistorySaveDebounce;
-  bool _wasPlaying = false;
-
-  static const int _minPlayRecordIntervalMs = 15000;
-
-  static const String _playCountsKey = 'play_counts_v1';
-  static const String _lastPlayedKey = 'last_played_ms_v1';
 
   static const String _includedFoldersKey = "included_folders";
   static const String _excludedFoldersKey = "excluded_folders";
@@ -739,7 +713,6 @@ class _MyHomePageState extends State<MyHomePage> {
   List<SongModel> _cachedRecentlyPlayed = <SongModel>[];
   List<SongModel> _cachedRecentlyAdded = <SongModel>[];
   Map<String, int> _cachedUserPlaylistTrackCounts = <String, int>{};
-  ConcatenatingAudioSource? _libraryPlaylist;
 
   bool _hideBottomBars = false;
   DateTime? _lastBottomBarsToggleAt;
@@ -813,18 +786,6 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     return false;
-  }
-
-  void _setCurrentSongId(int? songId) {
-    if (_currentSongId == songId) return;
-    _currentSongId = songId;
-    _currentSongIdNotifier.value = songId;
-  }
-
-  void _setCurrentPlayIndex(int? index) {
-    if (_currentPlayIndex == index) return;
-    _currentPlayIndex = index;
-    _currentPlayIndexNotifier.value = index;
   }
 
   String _displayAlbumTitle(String? raw) {
@@ -924,7 +885,7 @@ void _recomputeAllData() {
         representativeByAlbumId.keys
             .map((albumId) {
               final song = representativeByAlbumId[albumId]!;
-              final album = _albumMap[albumId];
+              final album = _controller.albumMap[albumId];
               final title = _displayAlbumTitle(album?.album ?? song.album);
               final artist = _displayArtistName(
                 album?.artist ?? _albumArtistFor(song),
@@ -1033,14 +994,16 @@ void _recomputeAllData() {
 
   void _recomputePlayHistoryStats() {
     final songs = _songs;
+    final playCounts = _controller.playCountBySongId;
+    final lastPlayed = _controller.lastPlayedMsBySongId;
 
     final mostPlayed =
         songs
-            .where((s) => (_playCountBySongId[s.id] ?? 0) > 0)
+            .where((s) => (playCounts[s.id] ?? 0) > 0)
             .toList(growable: false)
           ..sort((a, b) {
-            final ac = _playCountBySongId[a.id] ?? 0;
-            final bc = _playCountBySongId[b.id] ?? 0;
+            final ac = playCounts[a.id] ?? 0;
+            final bc = playCounts[b.id] ?? 0;
             final comp = bc.compareTo(ac);
             if (comp != 0) return comp;
             final t = _compareSortStrings(a.title, b.title);
@@ -1050,11 +1013,11 @@ void _recomputeAllData() {
 
     final recentlyPlayed =
         songs
-            .where((s) => (_lastPlayedMsBySongId[s.id] ?? 0) > 0)
+            .where((s) => (lastPlayed[s.id] ?? 0) > 0)
             .toList(growable: false)
           ..sort((a, b) {
-            final at = _lastPlayedMsBySongId[a.id] ?? 0;
-            final bt = _lastPlayedMsBySongId[b.id] ?? 0;
+            final at = lastPlayed[a.id] ?? 0;
+            final bt = lastPlayed[b.id] ?? 0;
             final comp = bt.compareTo(at);
             if (comp != 0) return comp;
             return a.id.compareTo(b.id);
@@ -1069,12 +1032,12 @@ void _recomputeAllData() {
       mainAxisSize: MainAxisSize.min,
       children: [
         ValueListenableBuilder<int?>(
-          valueListenable: _currentPlayIndexNotifier,
+          valueListenable: _controller.currentPlayIndexNotifier,
           builder: (context, currentIndex, _) => MiniPlayer(
-            player: _player,
+            controller: _controller,
             songs: _songs,
             currentIndex: currentIndex,
-            playlist: _currentPlaylist,
+            playlist: _controller.currentPlaylist,
             // Queue changes must not mutate the Library list.
             onQueueChanged: (_) {},
             onTap: (song) => _openNowPlaying(song),
@@ -1486,12 +1449,12 @@ void _recomputeAllData() {
     final playlistId = playlist.id;
     _showInlineDetail(
       _UserPlaylistPage(
-        player: _player,
+        player: _controller.player,
         playlistId: playlistId,
         playlistName: playlist.name,
         initialSongIds: playlist.songIds,
         librarySongs: _songs,
-        playlist: _currentPlaylist,
+        playlist: _controller.currentPlaylist,
         onQueueChanged: (_) {},
         selectedTabIndex: _selectedTabIndex,
         onNavigateTab: (index) {
@@ -1509,7 +1472,7 @@ void _recomputeAllData() {
           _openNowPlaying(s);
         },
         playFromQueue: (songs, initialIndex) async {
-          await _playFromQueue(songs, initialIndex: initialIndex);
+          await _controller.playFromQueue(songs, initialIndex: initialIndex);
         },
         onUpdateSongIds: (id, newSongIds) async {
           final idx = _userPlaylists.indexWhere((p) => p.id == id);
@@ -1868,143 +1831,18 @@ void _recomputeAllData() {
     return true;
   }
 
-  Uri _songUri(SongModel song) {
-    // Prefer content:// URIs on Android to avoid scoped-storage file access
-    // issues when SongModel.data is a raw filesystem path.
-    final primary = song.uri;
-    if (primary != null && primary.isNotEmpty) {
-      if (primary.startsWith('content:') || primary.startsWith('file:')) {
-        return Uri.parse(primary);
-      }
-    }
-
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      // Reliable fallback: build a MediaStore content Uri from the id.
-      // This continues to work even when song.data is a raw file path that the
-      // app cannot directly open under scoped storage.
-      return Uri.parse('content://media/external/audio/media/${song.id}');
-    }
-
-    final data = song.data;
-    if (data.startsWith('content:') || data.startsWith('file:')) {
-      return Uri.parse(data);
-    }
-    return Uri.file(data);
-  }
-
-  MediaItem _toMediaItem(SongModel song) {
-    final durationMs = song.duration;
-    final artUri = (song.albumId != null && song.albumId! > 0)
-        ? Uri.parse('content://media/external/audio/albumart/${song.albumId}')
-        : null;
-    return MediaItem(
-      id: song.id.toString(),
-      title: song.title,
-      artist: song.artist ?? 'Unknown',
-      album: song.album,
-      duration: durationMs != null ? Duration(milliseconds: durationMs) : null,
-      artUri: artUri,
-    );
-  }
-
-  int? _songIdFromTag(dynamic tag) {
-    if (tag is SongModel) return tag.id;
-    if (tag is MediaItem) return int.tryParse(tag.id);
-    return null;
-  }
-
-  void _syncLibraryCurrentIndexFromPlayer(int? playerIndex) {
-    if (!mounted) return;
-    if (playerIndex == null) {
-      _setCurrentPlayIndex(null);
-      _setCurrentSongId(null);
-      return;
-    }
-
-    final sequence = _player.sequence;
-    if (sequence == null || sequence.isEmpty) return;
-    if (playerIndex < 0 || playerIndex >= sequence.length) return;
-
-    final songId = _songIdFromTag(sequence[playerIndex].tag);
-    if (songId == null) return;
-
-    _setCurrentSongId(songId);
-
-    // During fast queue rebuilds, we intentionally suppress library-index mapping
-    // to avoid flicker. Still keep the songId updated (above) so UI stays correct.
-    if (_suppressIndexUpdates) return;
-
-    final libraryIndex = _songs.indexWhere((s) => s.id == songId);
-    if (libraryIndex < 0) return;
-
-    _setCurrentPlayIndex(libraryIndex);
-  }
-
-  void _syncLibraryCurrentIndexFromSequenceState(SequenceState? state) {
-    if (!mounted) return;
-
-    final tag = state?.currentSource?.tag;
-    final songId = _songIdFromTag(tag);
-    if (songId == null) return;
-
-    _setCurrentSongId(songId);
-
-    if (_suppressIndexUpdates) return;
-
-    final libraryIndex = _songs.indexWhere((s) => s.id == songId);
-    if (libraryIndex < 0) return;
-    _setCurrentPlayIndex(libraryIndex);
-  }
+  // Thin wrappers — delegates to PlaybackController.
+  Uri _songUri(SongModel song) => _controller.songUri(song);
+  MediaItem _toMediaItem(SongModel song) => _controller.toMediaItem(song);
+  int? _songIdFromTag(dynamic tag) => _controller.songIdFromTag(tag);
 
   @override
   void initState() {
     super.initState();
     _selectedTabIndex = widget.initialTabIndex.clamp(0, 3);
-    final handler = audioHandler;
-    if (handler != null) {
-      _player = handler.player;
-      _ownsPlayer = false;
-    } else {
-      // Tests and fallback path: allow the UI to build even if the background
-      // audio service hasn't been initialized yet.
-      _player = AudioPlayer();
-      _ownsPlayer = true;
-    }
     _scrollController.addListener(_handleScroll);
-    _currentIndexSub = _player.currentIndexStream.listen((index) {
-      _syncLibraryCurrentIndexFromPlayer(index);
-    });
-    _sequenceStateSub = _player.sequenceStateStream.listen((state) {
-      _syncLibraryCurrentIndexFromSequenceState(state);
-    });
-    _playerStateSub = _player.playerStateStream.listen((state) {
-      // Count a "play" when playback transitions to playing.
-      // This also covers resume-from-pause paths where the index doesn't change.
-      final nowPlaying = state.playing;
-      if (!_wasPlaying && nowPlaying) {
-        final id = _currentSongId ?? _currentSongIdFromPlayer();
-        if (id != null) _recordPlayForSongId(id);
-      }
-      _wasPlaying = nowPlaying;
-
-      if (state.playing) _hasStartedPlayback = true;
-      if (_hasStartedPlayback &&
-          state.processingState == ProcessingState.idle &&
-          defaultTargetPlatform == TargetPlatform.android &&
-          !suppressAutoExit) {
-        SystemNavigator.pop();
-      }
-    });
+    _controller.attachStreamListeners();
     _ensureLibraryPermissionAndLoad();
-  }
-
-  int? _currentSongIdFromPlayer() {
-    final idx = _player.currentIndex;
-    if (idx == null) return null;
-    final seq = _player.sequence;
-    if (seq == null || seq.isEmpty) return null;
-    if (idx < 0 || idx >= seq.length) return null;
-    return _songIdFromTag(seq[idx].tag);
   }
 
   void _handleScroll() {
@@ -2024,18 +1862,9 @@ void _recomputeAllData() {
 
   @override
   void dispose() {
-    _playHistorySaveDebounce?.cancel();
-    _currentIndexSub?.cancel();
-    _sequenceStateSub?.cancel();
-    _playerStateSub?.cancel();
     _searchController.dispose();
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
-    if (_ownsPlayer) {
-      _player.dispose();
-    }
-    _currentPlayIndexNotifier.dispose();
-    _currentSongIdNotifier.dispose();
     super.dispose();
   }
 
@@ -2114,93 +1943,9 @@ void _recomputeAllData() {
     }
   }
 
-  Map<int, int> _decodeIntMap(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return <int, int>{};
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return <int, int>{};
-      final out = <int, int>{};
-      for (final entry in decoded.entries) {
-        final key = int.tryParse(entry.key.toString());
-        if (key == null) continue;
-        final value = entry.value;
-        final v = value is int ? value : int.tryParse(value.toString());
-        if (v == null) continue;
-        out[key] = v;
-      }
-      return out;
-    } catch (_) {
-      return <int, int>{};
-    }
-  }
-
   Future<void> _loadPlayHistory() async {
-    final loaded = await _localStore.readPlayHistory();
-
-    Map<int, int> decodedCounts = <int, int>{};
-    Map<int, int> decodedLastPlayed = <int, int>{};
-
-    if (loaded != null) {
-      decodedCounts = _decodeIntMap(jsonEncode(loaded['counts']));
-      decodedLastPlayed = _decodeIntMap(jsonEncode(loaded['last_played']));
-    } else {
-      final prefs = await SharedPreferences.getInstance();
-      final playCountsRaw = prefs.getString(_playCountsKey);
-      final lastPlayedRaw = prefs.getString(_lastPlayedKey);
-      decodedCounts = _decodeIntMap(playCountsRaw);
-      decodedLastPlayed = _decodeIntMap(lastPlayedRaw);
-      await _localStore.writePlayHistory(
-        counts: decodedCounts.map((k, v) => MapEntry(k.toString(), v)),
-        lastPlayed: decodedLastPlayed.map((k, v) => MapEntry(k.toString(), v)),
-      );
-      await _localStore.markPlayHistoryMigrated();
-    }
-
-    _playCountBySongId
-      ..clear()
-      ..addAll(decodedCounts);
-    _lastPlayedMsBySongId
-      ..clear()
-      ..addAll(decodedLastPlayed);
-
+    await _controller.loadPlayHistory();
     _recomputeAllData();
-    if (mounted) setState(() {});
-  }
-
-  void _scheduleSavePlayHistory() {
-    _playHistorySaveDebounce?.cancel();
-    _playHistorySaveDebounce = Timer(const Duration(milliseconds: 700), () {
-      _savePlayHistory();
-    });
-  }
-
-  Future<void> _savePlayHistory() async {
-    try {
-      await _localStore.writePlayHistory(
-        counts: _playCountBySongId.map((k, v) => MapEntry(k.toString(), v)),
-        lastPlayed: _lastPlayedMsBySongId.map(
-          (k, v) => MapEntry(k.toString(), v),
-        ),
-      );
-    } catch (_) {
-      // Best-effort; do not crash UI.
-    }
-  }
-
-void _recordPlayForSongId(int songId) {
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    // Throttle so pausing/unpausing or rapid state flips don't inflate counts.
-    final last = _lastRecordedPlayMsBySongId[songId] ?? 0;
-    if (now - last < _minPlayRecordIntervalMs) return;
-    _lastRecordedPlayMsBySongId[songId] = now;
-
-    _playCountBySongId[songId] = (_playCountBySongId[songId] ?? 0) + 1;
-    _lastPlayedMsBySongId[songId] = now;
-    _scheduleSavePlayHistory();
-    
-    // Only recompute the history stats here to avoid main thread blocking
-    _recomputePlayHistoryStats(); 
     if (mounted) setState(() {});
   }
 
@@ -2249,7 +1994,7 @@ void _recordPlayForSongId(int songId) {
       );
       List<AlbumModel> albums = await _audioQuery.queryAlbums();
 
-      _albumMap = {for (final a in albums) a.id: a};
+      _controller.albumMap = {for (final a in albums) a.id: a};
 
       _allFolders = _extractFolders(rawSongs);
 
@@ -2263,26 +2008,15 @@ void _recordPlayForSongId(int songId) {
         ),
       );
 
-      final useBackground =
-          !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-      _libraryPlaylist = ConcatenatingAudioSource(
-        children: processedSongs.map((song) {
-          final uri = _songUri(song);
-          final tag = useBackground ? _toMediaItem(song) : song;
-          return AudioSource.uri(uri, tag: tag);
-        }).toList(),
-      );
-      _currentPlaylist = _libraryPlaylist;
+      _controller.songs = processedSongs;
+      _controller.libraryPlaylist = _controller.buildPlaylist(processedSongs);
+      _controller.currentPlaylist = _controller.libraryPlaylist;
 
       setState(() {
         _songs = processedSongs;
         _recomputeAllData();
         _isLoading = false;
       });
-
-      // If something is already playing (or resumes), sync the library highlight
-      // by song-id rather than by queue index.
-      _syncLibraryCurrentIndexFromPlayer(_player.currentIndex);
     } catch (e) {
       setState(() => _isLoading = false);
     }
@@ -2521,7 +2255,7 @@ void _recordPlayForSongId(int songId) {
     final raw = s.getMap["album_artist"]?.toString();
     final fromSong = _normalizeSortText(raw ?? '');
     if (fromSong.isNotEmpty) return fromSong;
-    final fromAlbum = _normalizeSortText(_albumMap[s.albumId]?.artist ?? '');
+    final fromAlbum = _normalizeSortText(_controller.albumMap[s.albumId]?.artist ?? '');
     if (fromAlbum.isNotEmpty) return fromAlbum;
     return _normalizeSortText(s.artist ?? '');
   }
@@ -2530,26 +2264,26 @@ void _recordPlayForSongId(int songId) {
     Future<void> Function() action,
   ) async {
     final handler = audioHandler;
-    final shouldSuspend = handler != null && handler.player == _player;
-    final playlist = _currentPlaylist;
-    final restoreSource = playlist ?? _player.audioSource;
+    final shouldSuspend = handler != null && handler.player == _controller.player;
+    final playlist = _controller.currentPlaylist;
+    final restoreSource = playlist ?? _controller.player.audioSource;
     final hasLoaded =
-        _player.processingState != ProcessingState.idle &&
+        _controller.player.processingState != ProcessingState.idle &&
         restoreSource != null;
     if (!hasLoaded) {
       await action();
       return;
     }
 
-    final wasPlaying = _player.playing;
-    final index = _player.currentIndex;
-    final pos = _player.position;
+    final wasPlaying = _controller.player.playing;
+    final index = _controller.player.currentIndex;
+    final pos = _controller.player.position;
 
-    _suppressIndexUpdates = true;
+    _controller.setSuppressIndexUpdates(true);
     try {
       pushAutoExitSuppress();
       if (shouldSuspend) handler.setStateBroadcastSuspended(true);
-      await detachPlayerForTagWrite(_player).timeout(
+      await detachPlayerForTagWrite(_controller.player).timeout(
         tagDetachTimeout,
         onTimeout: () {
           debugPrint('Timed out detaching player for tag write.');
@@ -2567,7 +2301,7 @@ void _recordPlayForSongId(int songId) {
       if (shouldSuspend) handler.setStateBroadcastSuspended(false);
       try {
         await restorePlayerAfterTagWrite(
-          _player,
+          _controller.player,
           restoreSource,
           index,
           pos,
@@ -2582,7 +2316,7 @@ void _recordPlayForSongId(int songId) {
         debugPrint('Failed to restore playback after tag write: $e');
         debugPrintStack(stackTrace: st);
       } finally {
-        _suppressIndexUpdates = false;
+        _controller.setSuppressIndexUpdates(false);
       }
     }
   }
@@ -2919,105 +2653,10 @@ void _recordPlayForSongId(int songId) {
   }
 
   Future<void> _applySort(SortMode mode) async {
-    if (_songs.isEmpty || _currentPlaylist == null) return;
-    final currentId =
-        (_currentPlayIndex != null &&
-            _currentPlayIndex! >= 0 &&
-            _currentPlayIndex! < _songs.length)
-        ? _songs[_currentPlayIndex!].id
-        : null;
-    final wasPlaying = _player.playing;
-    final position = _player.position;
-
-    _sortMode = mode;
-
-    _songs.sort((a, b) {
-      switch (mode) {
-        case SortMode.artist:
-          final artistComp = _compareSortStrings(
-            a.artist ?? "",
-            b.artist ?? "",
-          );
-          if (artistComp != 0) return artistComp;
-          final titleComp = _compareSortStrings(a.title, b.title);
-          if (titleComp != 0) return titleComp;
-          return a.id.compareTo(b.id);
-        case SortMode.albumArtist:
-          // 1. Album artist, 2. Album (alphabetical), 3. Track #
-          final artistComp = _compareSortStrings(
-            _albumArtistFor(a),
-            _albumArtistFor(b),
-          );
-          if (artistComp != 0) return artistComp;
-          final albumComp = _compareSortStrings(a.album ?? "", b.album ?? "");
-          if (albumComp != 0) return albumComp;
-          final trackComp = _compareDiscAndTrack(a, b);
-          if (trackComp != 0) return trackComp;
-          final titleComp = _compareSortStrings(a.title, b.title);
-          if (titleComp != 0) return titleComp;
-          return a.id.compareTo(b.id);
-        case SortMode.year:
-          final yearComp = _yearForCompare(a).compareTo(_yearForCompare(b));
-          if (yearComp != 0) return yearComp;
-          final artistComp = _compareSortStrings(
-            _albumArtistFor(a),
-            _albumArtistFor(b),
-          );
-          if (artistComp != 0) return artistComp;
-          final albumComp = _compareSortStrings(a.album ?? "", b.album ?? "");
-          if (albumComp != 0) return albumComp;
-          final trackComp = _compareDiscAndTrack(a, b);
-          if (trackComp != 0) return trackComp;
-          final titleComp = _compareSortStrings(a.title, b.title);
-          if (titleComp != 0) return titleComp;
-          return a.id.compareTo(b.id);
-        case SortMode.albumArtistYear:
-        default:
-          // 1. Album artist, 2. Year, 3. Track #
-          final artistComp = _compareSortStrings(
-            _albumArtistFor(a),
-            _albumArtistFor(b),
-          );
-          if (artistComp != 0) return artistComp;
-          final yearComp = _yearForCompare(a).compareTo(_yearForCompare(b));
-          if (yearComp != 0) return yearComp;
-          final albumComp = _compareSortStrings(a.album ?? "", b.album ?? "");
-          if (albumComp != 0) return albumComp;
-          final trackComp = _compareDiscAndTrack(a, b);
-          if (trackComp != 0) return trackComp;
-          final titleComp = _compareSortStrings(a.title, b.title);
-          if (titleComp != 0) return titleComp;
-          return a.id.compareTo(b.id);
-      }
-    });
+    await _controller.applySort(mode);
+    _songs = _controller.songs;
     _recomputeAllData();
     if (mounted) setState(() {});
-
-    final useBackground =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-    _currentPlaylist = ConcatenatingAudioSource(
-      children: _songs.map((song) {
-        final uri = _songUri(song);
-        final tag = useBackground ? _toMediaItem(song) : song;
-        return AudioSource.uri(uri, tag: tag);
-      }).toList(),
-    );
-
-    int? newIndex;
-    if (currentId != null) {
-      newIndex = _songs.indexWhere((s) => s.id == currentId);
-      if (newIndex < 0) newIndex = null;
-    }
-
-    if (newIndex != null) {
-      await _player.setAudioSource(_currentPlaylist!, initialIndex: newIndex);
-      await _player.seek(position, index: newIndex);
-      if (wasPlaying) await _player.play();
-      _setCurrentPlayIndex(newIndex);
-    } else {
-      await _player.setAudioSource(_currentPlaylist!);
-      _setCurrentPlayIndex(null);
-    }
   }
 
   Future<void> _showSongOptionsSheet(SongModel song, int index) async {
@@ -3052,32 +2691,32 @@ void _recordPlayForSongId(int songId) {
     }
 
     Future<void> playNext() async {
-      if (_currentPlaylist == null || _player.currentIndex == null) {
-        await _playSong(index);
+      if (_controller.currentPlaylist == null || _controller.player.currentIndex == null) {
+        await _controller.playSong(index);
         return;
       }
-      final insertAt = (_player.currentIndex! + 1).clamp(
+      final insertAt = (_controller.player.currentIndex! + 1).clamp(
         0,
-        _currentPlaylist!.length,
+        _controller.currentPlaylist!.length,
       );
       try {
-        await _currentPlaylist!.insert(insertAt, _sourceForSong(song));
+        await _controller.currentPlaylist!.insert(insertAt, _sourceForSong(song));
         HapticFeedback.selectionClick();
       } catch (_) {
-        await _playSong(index);
+        await _controller.playSong(index);
       }
     }
 
     Future<void> addToQueue() async {
-      if (_currentPlaylist == null) {
-        await _playSong(index);
+      if (_controller.currentPlaylist == null) {
+        await _controller.playSong(index);
         return;
       }
       try {
-        await _currentPlaylist!.add(_sourceForSong(song));
+        await _controller.currentPlaylist!.add(_sourceForSong(song));
         HapticFeedback.selectionClick();
       } catch (_) {
-        await _playSong(index);
+        await _controller.playSong(index);
       }
     }
 
@@ -3189,7 +2828,7 @@ void _recordPlayForSongId(int songId) {
                   onTap: () {
                     Navigator.pop(ctx);
                     HapticFeedback.selectionClick();
-                    _playSong(index);
+                    _controller.playSong(index);
                   },
                 ),
                 ListTile(
@@ -3301,35 +2940,24 @@ void _recordPlayForSongId(int songId) {
 
     await _ensureNotificationPermissionIfNeeded();
 
-    final useBackground =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-    final newPlaylist = ConcatenatingAudioSource(
-      children: queue.map((song) {
-        final uri = _songUri(song);
-        final tag = useBackground ? _toMediaItem(song) : song;
-        return AudioSource.uri(uri, tag: tag);
-      }).toList(),
-    );
-
-    // Highlight the correct item in the library if present.
+    final newPlaylist = _controller.buildPlaylist(queue);
     final songId = queue[initialIndex].id;
+
+    _controller.currentPlaylist = newPlaylist;
     final libraryIndex = _songs.indexWhere((s) => s.id == songId);
-    setState(() {
-      _currentPlaylist = newPlaylist;
-      _setCurrentPlayIndex(libraryIndex >= 0 ? libraryIndex : null);
-      _setCurrentSongId(songId);
-    });
+    _controller.currentPlayIndex = libraryIndex >= 0 ? libraryIndex : null;
+    _controller.currentSongId = songId;
 
     try {
-      _suppressIndexUpdates = true;
-      await _player.setAudioSource(newPlaylist, initialIndex: initialIndex);
-      await _player.play();
-      _recordPlayForSongId(songId);
+      _controller.setSuppressIndexUpdates(true);
+      await _controller.player.setAudioSource(newPlaylist, initialIndex: initialIndex);
+      await _controller.player.play();
+      _controller.recordPlayForSongId(songId);
     } catch (e, st) {
       debugPrint('Failed to play custom queue initialIndex=$initialIndex: $e');
       debugPrintStack(stackTrace: st);
       if (mounted) {
-        _setCurrentPlayIndex(null);
+        _controller.currentPlayIndex = null;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Playback failed: ${e.toString()}'),
@@ -3338,50 +2966,14 @@ void _recordPlayForSongId(int songId) {
         );
       }
     } finally {
-      _suppressIndexUpdates = false;
-      _syncLibraryCurrentIndexFromPlayer(_player.currentIndex);
+      _controller.setSuppressIndexUpdates(false);
     }
   }
 
   Future<void> _playSong(int index) async {
     if (index < 0 || index >= _songs.length) return;
-
     await _ensureNotificationPermissionIfNeeded();
-
-    setState(() {
-      _setCurrentPlayIndex(index);
-      _setCurrentSongId(_songs[index].id);
-    });
-    try {
-      _suppressIndexUpdates = true;
-      final activeLibraryPlaylist = _libraryPlaylist;
-      if (_player.audioSource != activeLibraryPlaylist) {
-        _currentPlaylist = activeLibraryPlaylist;
-        await _player.setAudioSource(_currentPlaylist!, initialIndex: index);
-      } else {
-        await _player.seek(Duration.zero, index: index);
-      }
-      await _player.play();
-      _recordPlayForSongId(_songs[index].id);
-    } catch (e, st) {
-      debugPrint('Failed to play song index=$index: $e');
-      debugPrintStack(stackTrace: st);
-      if (mounted) {
-        _setCurrentPlayIndex(null);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Playback failed: ${e.toString()}'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      _suppressIndexUpdates = false;
-      // If the user skips quickly while we were suppressing index updates,
-      // we may have missed the latest index event. Sync to the player's
-      // current item to keep the mini player (and UI) accurate.
-      _syncLibraryCurrentIndexFromPlayer(_player.currentIndex);
-    }
+    await _controller.playSong(index);
   }
 
   @override
@@ -3895,14 +3487,14 @@ void _recordPlayForSongId(int songId) {
                                 HapticFeedback.selectionClick();
                                 controller.closeView(song.title);
                                 FocusManager.instance.primaryFocus?.unfocus();
-                                if (idx != -1) _playSong(idx);
+                                if (idx != -1) _controller.playSong(idx);
                               },
                             ),
                             onTap: () {
                               HapticFeedback.selectionClick();
                               controller.closeView(song.title);
                               FocusManager.instance.primaryFocus?.unfocus();
-                              if (idx != -1) _playSong(idx);
+                              if (idx != -1) _controller.playSong(idx);
                             },
                           ),
                         );
@@ -4053,7 +3645,7 @@ void _recordPlayForSongId(int songId) {
                 ),
                 PopupMenuButton<SortMode>(
                   icon: const Icon(Icons.sort_rounded),
-                  initialValue: _sortMode,
+                  initialValue: _controller.sortMode,
                   tooltip: 'Sort library',
                   onSelected: (mode) {
                     HapticFeedback.selectionClick();
@@ -4213,10 +3805,10 @@ void _recordPlayForSongId(int songId) {
 
               // 1. Push the listeners DOWN to the individual item level
               return ValueListenableBuilder<int?>(
-                valueListenable: _currentSongIdNotifier,
+                valueListenable: _controller.currentSongIdNotifier,
                 builder: (context, currentSongId, _) {
                   return ValueListenableBuilder<int?>(
-                    valueListenable: _currentPlayIndexNotifier,
+                    valueListenable: _controller.currentPlayIndexNotifier,
                     builder: (context, currentPlayIndex, __) {
                       final isCurrent = currentSongId != null
                           ? currentSongId == song.id
@@ -4226,10 +3818,10 @@ void _recordPlayForSongId(int songId) {
                       // This avoids dozens of inactive tiles needlessly rebuilding on Play/Pause.
                       return StreamBuilder<PlayerState>(
                         stream: (isCurrent && isVisible)
-                            ? _player.playerStateStream
+                            ? _controller.player.playerStateStream
                             : null,
                         builder: (context, snap) {
-                          final playing = isCurrent ? (snap.data?.playing ?? _player.playing) : false;
+                          final playing = isCurrent ? (snap.data?.playing ?? _controller.player.playing) : false;
                           final showPause = isCurrent && playing;
                           final icon = showPause
                               ? Icons.pause_rounded
@@ -4344,7 +3936,7 @@ void _recordPlayForSongId(int songId) {
                                       if (_isSelectionMode) {
                                         _toggleSelectedSongId(song.id);
                                       } else {
-                                        _playSong(index);
+                                        _controller.playSong(index);
                                       }
                                     },
                                     onLongPress: () {
@@ -4606,14 +4198,14 @@ void _recordPlayForSongId(int songId) {
                                                     HapticFeedback.selectionClick();
                                                     if (isCurrent) {
                                                       if (playing) {
-                                                        await _player.pause();
+                                                        await _controller.player.pause();
                                                       } else {
                                                         await _ensureNotificationPermissionIfNeeded();
-                                                        await _player.play();
+                                                        await _controller.player.play();
                                                       }
                                                       return;
                                                     }
-                                                    _playSong(index);
+                                                    _controller.playSong(index);
                                                   },
                                                 ),
                                         ],
@@ -5106,13 +4698,13 @@ void _recordPlayForSongId(int songId) {
 
       _showInlineDetail(
         _SmartPlaylistPage(
-          player: _player,
+          player: _controller.player,
           title: title,
           description: description,
           icon: icon,
           songs: list,
           librarySongs: _songs,
-          playlist: _currentPlaylist,
+          playlist: _controller.currentPlaylist,
           onQueueChanged: (_) {},
           selectedTabIndex: _selectedTabIndex,
           onNavigateTab: (index) {
@@ -5132,12 +4724,12 @@ void _recordPlayForSongId(int songId) {
           onPlayAll: list.isEmpty
               ? null
               : () async {
-                  await _playFromQueue(list, initialIndex: 0);
+                  await _controller.playFromQueue(list, initialIndex: 0);
                 },
           onPlaySong: (song) async {
             final idx = list.indexWhere((s) => s.id == song.id);
             if (idx == -1) return;
-            await _playFromQueue(list, initialIndex: idx);
+            await _controller.playFromQueue(list, initialIndex: idx);
           },
         ),
       );
@@ -5458,10 +5050,10 @@ void _recordPlayForSongId(int songId) {
           barrierColor: Colors.transparent,
           barrierLabel: 'Now Playing',
           pageBuilder: (_, __, ___) => NowPlayingPage(
-            player: _player,
+            player: _controller.player,
             song: song,
             songs: _songs,
-            playlist: _currentPlaylist,
+            playlist: _controller.currentPlaylist,
             onQueueChanged: (_) {},
             onOpenAlbum: _openAlbumPageFromSong,
             onOpenArtist: _openArtistPageFromSong,
@@ -5521,13 +5113,13 @@ void _recordPlayForSongId(int songId) {
 
     _showInlineDetail(
       AlbumPage(
-        player: _player,
+        player: _controller.player,
         albumId: albumId,
         albumTitle: albumTitle,
         albumArtist: albumArtist,
         songs: albumSongs,
         librarySongs: _songs,
-        playlist: _currentPlaylist,
+        playlist: _controller.currentPlaylist,
         onQueueChanged: (_) {},
         selectedTabIndex: _selectedTabIndex,
         onNavigateTab: (index) {
@@ -5547,7 +5139,7 @@ void _recordPlayForSongId(int songId) {
         onPlaySong: (s) async {
           final albumIndex = albumSongs.indexWhere((x) => x.id == s.id);
           if (albumIndex == -1) return;
-          await _playFromQueue(albumSongs, initialIndex: albumIndex);
+          await _controller.playFromQueue(albumSongs, initialIndex: albumIndex);
         },
       ),
     );
@@ -5638,11 +5230,11 @@ void _recordPlayForSongId(int songId) {
 
     _showInlineDetail(
       ArtistPage(
-        player: _player,
+        player: _controller.player,
         artistName: normalizedArtist,
         albums: albums,
         librarySongs: _songs,
-        playlist: _currentPlaylist,
+        playlist: _controller.currentPlaylist,
         onQueueChanged: (_) {},
         selectedTabIndex: _selectedTabIndex,
         onNavigateTab: (index) {
@@ -5677,7 +5269,7 @@ void _recordPlayForSongId(int songId) {
                   queue.addAll(sorted);
                 }
                 if (queue.isEmpty) return;
-                await _playFromQueue(queue, initialIndex: 0);
+                await _controller.playFromQueue(queue, initialIndex: 0);
               },
       ),
     );

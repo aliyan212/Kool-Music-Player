@@ -15,10 +15,11 @@ import 'package:palette_generator/palette_generator.dart';
 import '../android_notifications.dart';
 import '../main.dart';
 import '../pages/queue_page.dart';
+import '../services/playback_controller.dart';
 
 
 class MiniPlayer extends StatefulWidget {
-  final AudioPlayer player;
+  final PlaybackController controller;
   final List<SongModel> songs;
   final int? currentIndex;
   final void Function(SongModel) onTap;
@@ -27,7 +28,7 @@ class MiniPlayer extends StatefulWidget {
 
   const MiniPlayer({
     super.key,
-    required this.player,
+    required this.controller,
     required this.songs,
     this.currentIndex,
     required this.onTap,
@@ -53,9 +54,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
     if (widget.songs.isEmpty) return const SizedBox.shrink();
 
     return StreamBuilder<SequenceState?>(
-      stream: widget.player.sequenceStateStream,
+      stream: widget.controller.sequenceStateStream,
       builder: (context, snap) {
-        final state = snap.data ?? widget.player.sequenceState;
+        final state = snap.data ?? widget.controller.sequenceState;
         final tag = state?.currentSource?.tag;
         final songId = MiniPlayer._songIdFromTag(tag);
 
@@ -66,7 +67,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
         }
 
         resolvedIndex ??= widget.currentIndex;
-        resolvedIndex ??= widget.player.currentIndex;
+        resolvedIndex ??= widget.controller.currentIndex;
 
         if (resolvedIndex != null &&
             resolvedIndex >= 0 &&
@@ -83,12 +84,12 @@ class _MiniPlayerState extends State<MiniPlayer> {
 
         final song = widget.songs[index];
         return MiniPlayerTile(
-          player: widget.player,
+          controller: widget.controller,
           song: song,
           songs: widget.songs,
           currentIndex: index,
           onTap: () => widget.onTap(song),
-          onDismiss: () => widget.player.stop(),
+          onDismiss: () => widget.controller.stop(),
           playlist: widget.playlist,
           onQueueChanged: widget.onQueueChanged,
         );
@@ -98,7 +99,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
 }
 
 class MiniPlayerTile extends StatefulWidget {
-  final AudioPlayer player;
+  final PlaybackController controller;
   final SongModel song;
   final List<SongModel> songs;
   final int currentIndex;
@@ -109,7 +110,7 @@ class MiniPlayerTile extends StatefulWidget {
 
   const MiniPlayerTile({
     super.key,
-    required this.player,
+    required this.controller,
     required this.song,
     required this.songs,
     required this.currentIndex,
@@ -189,7 +190,7 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
         ),
       );
     }
-    await widget.player.play();
+    await widget.controller.play();
   }
 
   void _scheduleUpdateColor() {
@@ -280,11 +281,11 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
       PageRouteBuilder(
         opaque: false,
         pageBuilder: (_, __, ___) => QueuePage(
-          player: widget.player,
+          player: widget.controller.player,
           songs: widget.songs,
-          currentIndex: widget.player.currentIndex ?? 0,
+          currentIndex: widget.controller.currentIndex ?? 0,
           onPlayIndex: (index) {
-            widget.player.seek(Duration.zero, index: index);
+            widget.controller.seek(Duration.zero, index: index);
           },
           playlist: widget.playlist,
           onQueueChanged: widget.onQueueChanged,
@@ -352,20 +353,20 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
       onHorizontalDragEnd: (details) {
         if (details.velocity.pixelsPerSecond.dx < -300) {
           // Swipe left - next track
-          if (widget.player.hasNext) {
+          if (widget.controller.hasNext) {
             HapticFeedback.selectionClick();
-            widget.player.seekToNext();
+            widget.controller.seekToNext();
           }
         } else if (details.velocity.pixelsPerSecond.dx > 300) {
           // Swipe right - previous track
           HapticFeedback.selectionClick();
-          final pos = widget.player.position;
+          final pos = widget.controller.position ?? Duration.zero;
           if (pos > const Duration(seconds: 10)) {
-            widget.player.seek(Duration.zero);
-          } else if (widget.player.hasPrevious) {
-            widget.player.seekToPrevious();
+            widget.controller.seek(Duration.zero);
+          } else if (widget.controller.hasPrevious) {
+            widget.controller.seekToPrevious();
           } else {
-            widget.player.seek(Duration.zero);
+            widget.controller.seek(Duration.zero);
           }
         }
       },
@@ -409,7 +410,7 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
                       builder: (context, isFg, _) {
                         Widget progressBar(Duration pos) {
                           final progress =
-                              ((pos.inMilliseconds) / (widget.player.duration?.inMilliseconds ?? 1))
+                              ((pos.inMilliseconds) / (widget.controller.duration?.inMilliseconds ?? 1))
                                   .clamp(0.0, 1.0);
                           return Container(
                             height: 3,
@@ -436,13 +437,13 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
                         }
 
                         if (!isFg) {
-                          return progressBar(widget.player.position);
+                          return progressBar(widget.controller.position ?? Duration.zero);
                         }
 
                         return StreamBuilder<Duration>(
-                          stream: widget.player.positionStream,
+                          stream: widget.controller.positionStream,
                           builder: (context, snap) =>
-                              progressBar(snap.data ?? widget.player.position),
+                              progressBar(snap.data ?? widget.controller.position ?? Duration.zero),
                         );
                       },
                     ),
@@ -594,24 +595,24 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
                         Icons.skip_previous_rounded,
                         textColor,
                         () {
-                          final pos = widget.player.position;
+                          final pos = widget.controller.position ?? Duration.zero;
                           if (pos > const Duration(seconds: 10)) {
-                            widget.player.seek(Duration.zero);
-                          } else if (widget.player.hasPrevious) {
-                            widget.player.seekToPrevious();
+                            widget.controller.seek(Duration.zero);
+                          } else if (widget.controller.hasPrevious) {
+                            widget.controller.seekToPrevious();
                           } else {
-                            widget.player.seek(Duration.zero);
+                            widget.controller.seek(Duration.zero);
                           }
                         },
                       ),
                       StreamBuilder<PlayerState>(
-                        stream: widget.player.playerStateStream,
+                        stream: widget.controller.playerStateStream,
                         builder: (context, snap) {
                           final playing = snap.data?.playing ?? false;
                           return _buildControlButton(
                             playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                             textColor,
-                            playing ? widget.player.pause : _playWithNotificationPermission,
+                            playing ? widget.controller.pause : _playWithNotificationPermission,
                             size: 32,
                           );
                         },
@@ -619,7 +620,7 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
                       _buildControlButton(
                         Icons.skip_next_rounded,
                         textColor,
-                        () => widget.player.hasNext ? widget.player.seekToNext() : null,
+                        () => widget.controller.hasNext ? widget.controller.seekToNext() : null,
                       ),
                       const SizedBox(width: 6),
                     ],
