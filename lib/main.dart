@@ -2009,6 +2009,11 @@ void _recomputeAllData() {
       );
 
       _controller.songs = processedSongs;
+
+      // Enrich year data for songs where MediaStore returned 0.
+      // This handles files with ID3v2.4 TDRC frames not visible to MediaStore.
+      _enrichSongYears(processedSongs);
+
       _controller.libraryPlaylist = _controller.buildPlaylist(processedSongs);
       _controller.currentPlaylist = _controller.libraryPlaylist;
 
@@ -2083,15 +2088,35 @@ void _recomputeAllData() {
     }
 
     int yearFromSong(SongModel s) {
-      final v = s.getMap["year"];
-      if (v == null) return 0;
-      if (v is int) return v;
-      final raw = v.toString();
-      final direct = int.tryParse(raw);
-      if (direct != null) return direct;
-      final match = yearRegex.firstMatch(raw);
-      if (match == null) return 0;
-      return int.tryParse(match.group(0)!) ?? 0;
+      final v = s.getMap['year'];
+      if (v != null) {
+        if (v is int) {
+          if (v > 0) return v;
+        } else {
+          final raw = v.toString();
+          final direct = int.tryParse(raw);
+          if (direct != null && direct > 0) return direct;
+          final match = yearRegex.firstMatch(raw);
+          if (match != null) {
+            final parsed = int.tryParse(match.group(0)!);
+            if (parsed != null && parsed > 0) return parsed;
+          }
+        }
+      }
+
+      // Try other date fields (TDRC fallback).
+      for (final key in ['date', 'date_modified', 'year_orig']) {
+        final alt = s.getMap[key];
+        if (alt != null) {
+          final match = yearRegex.firstMatch(alt.toString());
+          if (match != null) {
+            final parsed = int.tryParse(match.group(0)!);
+            if (parsed != null && parsed > 0) return parsed;
+          }
+        }
+      }
+
+      return 0;
     }
 
     int yearForCompare(SongModel s) {
@@ -2202,20 +2227,79 @@ void _recomputeAllData() {
   }
 
   int _yearFromSong(SongModel s) {
-    final v = s.getMap["year"];
-    if (v == null) return 0;
-    if (v is int) return v;
-    final raw = v.toString();
-    final direct = int.tryParse(raw);
-    if (direct != null) return direct;
-    final match = _yearRegex.firstMatch(raw);
-    if (match == null) return 0;
-    return int.tryParse(match.group(0)!) ?? 0;
+    // 1. Check enriched cache from PlaybackController.
+    final cached = _controller.enrichedYearBySongId[s.id];
+    if (cached != null && cached > 0) return cached;
+
+    // 2. Check MediaStore year field.
+    final v = s.getMap['year'];
+    if (v != null) {
+      if (v is int) {
+        if (v > 0) return v;
+      } else {
+        final raw = v.toString();
+        final direct = int.tryParse(raw);
+        if (direct != null && direct > 0) return direct;
+        final match = _yearRegex.firstMatch(raw);
+        if (match != null) {
+          final parsed = int.tryParse(match.group(0)!);
+          if (parsed != null && parsed > 0) return parsed;
+        }
+      }
+    }
+
+    // 3. Try other date fields as last-resort fallback.
+    for (final key in ['date', 'date_modified', 'year_orig']) {
+      final alt = s.getMap[key];
+      if (alt != null) {
+        final match = _yearRegex.firstMatch(alt.toString());
+        if (match != null) {
+          final parsed = int.tryParse(match.group(0)!);
+          if (parsed != null && parsed > 0) return parsed;
+        }
+      }
+    }
+
+    return 0;
   }
 
   int _yearForCompare(SongModel s) {
     final y = _yearFromSong(s);
     return y == 0 ? 99999 : y;
+  }
+
+  /// Enriches year data for songs where MediaStore returned 0,
+  /// using [AudioTags] to read the actual ID3 tags directly.
+  /// This handles files where the year is stored in TDRC (ID3v2.4)
+  /// instead of TYER (ID3v2.3), which MediaStore may not expose.
+  Future<void> _enrichSongYears(List<SongModel> songs) async {
+    _controller.enrichedYearBySongId.clear();
+    final songsNeedingEnrich = songs.where((s) {
+      final v = s.getMap['year'];
+      if (v == null) return true;
+      if (v is int) return v <= 0;
+      return int.tryParse(v.toString()) == null;
+    }).toList();
+
+    if (songsNeedingEnrich.isEmpty) return;
+
+    // Process in batches to avoid blocking the UI thread for too long.
+    const batchSize = 15;
+    for (var i = 0; i < songsNeedingEnrich.length; i += batchSize) {
+      final batch = songsNeedingEnrich.skip(i).take(batchSize);
+      await Future.wait(batch.map((s) async {
+        try {
+          final tag = await AudioTags.read(s.data);
+          if (tag?.year != null && tag!.year! > 0) {
+            _controller.enrichedYearBySongId[s.id] = tag.year!;
+          }
+        } catch (_) {
+          // File may be unreadable or in a format audiotags can't parse.
+        }
+      }));
+      // Yield to the event loop between batches.
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
   }
 
   int _compareDiscAndTrack(SongModel a, SongModel b) {
@@ -6539,15 +6623,40 @@ class _UserPlaylistPageState extends State<_UserPlaylistPage> {
   }
 
   int _yearFromSong(SongModel s) {
-    final v = s.getMap["year"];
-    if (v == null) return 0;
-    if (v is int) return v;
-    final raw = v.toString();
-    final direct = int.tryParse(raw);
-    if (direct != null) return direct;
-    final match = _playlistYearRegex.firstMatch(raw);
-    if (match == null) return 0;
-    return int.tryParse(match.group(0)!) ?? 0;
+    // 1. Check enriched cache from PlaybackController.
+    final cached = playbackController.enrichedYearBySongId[s.id];
+    if (cached != null && cached > 0) return cached;
+
+    // 2. Check MediaStore year field.
+    final v = s.getMap['year'];
+    if (v != null) {
+      if (v is int) {
+        if (v > 0) return v;
+      } else {
+        final raw = v.toString();
+        final direct = int.tryParse(raw);
+        if (direct != null && direct > 0) return direct;
+        final match = _playlistYearRegex.firstMatch(raw);
+        if (match != null) {
+          final parsed = int.tryParse(match.group(0)!);
+          if (parsed != null && parsed > 0) return parsed;
+        }
+      }
+    }
+
+    // 3. Try other date fields as last-resort fallback.
+    for (final key in ['date', 'date_modified', 'year_orig']) {
+      final alt = s.getMap[key];
+      if (alt != null) {
+        final match = _playlistYearRegex.firstMatch(alt.toString());
+        if (match != null) {
+          final parsed = int.tryParse(match.group(0)!);
+          if (parsed != null && parsed > 0) return parsed;
+        }
+      }
+    }
+
+    return 0;
   }
 
   int _yearForCompare(SongModel s) {

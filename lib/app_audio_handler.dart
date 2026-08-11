@@ -2,15 +2,31 @@ import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
+
+/// Describes the current audio focus relationship with the OS.
+enum AudioFocusState {
+  /// We hold focus and can play normally.
+  gained,
+
+  /// Focus lost temporarily (notification ping, short call).
+  /// Playback is paused; will auto-resume when focus returns.
+  transientLoss,
+
+  /// Focus lost permanently (another app started playing music).
+  /// Playback is stopped; will NOT auto-resume.
+  permanentLoss,
+
+  /// Volume is lowered (ducked) but we're still playing.
+  ducked,
+}
 
 /// Audio handler backing the media notification / lockscreen controls.
 ///
 /// Keep this file minimal and reliable: it should never block app startup.
 class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   AppAudioHandler(this.player) {
-    // Best-effort: configure audio focus/interruptions.
-    // Do not block app startup on this.
     unawaited(_initAudioSession());
 
     _playerStateSub = player.playerStateStream.listen((_) {
@@ -53,6 +69,7 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   StreamSubscription<void>? _becomingNoisySub;
   Timer? _positionUpdateTimer;
   Timer? _duckFailsafeTimer;
+  Timer? _permanentLossTimer;
 
   bool _suspendStateUpdates = false;
 
@@ -62,12 +79,39 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Duration? _lastPlaybackPosition;
   DateTime? _lastPlaybackRecoveryAt;
 
-  bool _resumeAfterInterruption = false;
   bool _ducked = false;
   double _preDuckVolume = 1.0;
   double _baselineVolume = 1.0;
 
   DateTime? _lastMuteRecoveryAt;
+
+  // ── Audio focus state ──────────────────────────────────────────────
+
+  final _audioFocusStateController =
+      StreamController<AudioFocusState>.broadcast();
+  Stream<AudioFocusState> get audioFocusState =>
+      _audioFocusStateController.stream;
+  AudioFocusState _focusState = AudioFocusState.gained;
+
+  AudioFocusState get currentFocusState => _focusState;
+
+  void _setFocusState(AudioFocusState newState) {
+    if (_focusState == newState) return;
+    _focusState = newState;
+    _audioFocusStateController.add(newState);
+  }
+
+  /// Android maps focus events through [AudioInterruptionEvent].
+  ///   AUDIOFOCUS_LOSS                    → pause begin (no end — permanent)
+  ///   AUDIOFOCUS_LOSS_TRANSIENT          → pause begin then end (transient)
+  ///   AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK → duck begin then end
+  ///
+  /// Since [audio_session] maps both LOSS and LOSS_TRANSIENT to
+  /// [AudioInterruptionType.pause], we use a timer: if the "end" event
+  /// doesn't arrive within [permanentLossTimeout], treat the loss as permanent.
+  static const Duration permanentLossTimeout = Duration(seconds: 6);
+
+  // ── Volume helpers ─────────────────────────────────────────────────
 
   Future<void> _setNormalVolume() async {
     final v = _baselineVolume.clamp(0.0, 1.0);
@@ -76,7 +120,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   Future<void> _recoverFromStuckMuteIfNeeded() async {
-    // Guard: don't spam recovery.
     final now = DateTime.now();
     final last = _lastMuteRecoveryAt;
     if (last != null && now.difference(last) < const Duration(seconds: 5))
@@ -84,17 +127,12 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _lastMuteRecoveryAt = now;
 
     try {
-      // Restore baseline volume first.
       await _setNormalVolume();
-
-      // If still muted, do a quick pause→play (mirrors the user's workaround).
       if (player.playing && player.volume <= 0.001) {
         await player.pause();
         await player.play();
       }
-    } catch (_) {
-      // Ignore.
-    }
+    } catch (_) {}
   }
 
   void _recordPlaybackProgress() {
@@ -137,10 +175,10 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await player.play();
       _lastPlaybackProgressAt = DateTime.now();
       _lastPlaybackPosition = player.position;
-    } catch (_) {
-      // Ignore.
-    }
+    } catch (_) {}
   }
+
+  // ── Audio session / focus ──────────────────────────────────────────
 
   Future<void> _initAudioSession() async {
     try {
@@ -148,7 +186,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _session = session;
       await session.configure(const AudioSessionConfiguration.music());
 
-      // Establish a baseline volume to restore to after ducking.
       _baselineVolume = player.volume.clamp(0.0, 1.0);
 
       // Headphones unplugged / BT disconnect → pause.
@@ -156,93 +193,122 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         player.pause();
       });
 
-      _interruptionSub ??= session.interruptionEventStream.listen((
-        event,
-      ) async {
-        // Interruption begins.
-        if (event.begin) {
-          switch (event.type) {
-            case AudioInterruptionType.duck:
-              if (!_ducked) {
-                _duckStartedAt = DateTime.now();
-                // Record a baseline (normal) volume only when not ducked.
-                _baselineVolume = player.volume.clamp(0.0, 1.0);
-                if (_baselineVolume <= 0.001) _baselineVolume = 1.0;
-
-                _preDuckVolume = _baselineVolume;
-                _ducked = true;
-                // Conservative duck volume.
-                // Some devices fail to send the matching "end" event. Add a
-                // failsafe so we don't get stuck in a ducked (near-muted) state.
-                var duckVol = (_preDuckVolume * 0.2);
-                if (duckVol < 0.08) duckVol = 0.08;
-                if (duckVol > 1.0) duckVol = 1.0;
-                await player.setVolume(duckVol);
-
-                _duckFailsafeTimer?.cancel();
-                _duckFailsafeTimer = Timer(
-                  const Duration(seconds: 20),
-                  () async {
-                    if (!_ducked) return;
-                    // If we're still ducked after a long time, assume the end
-                    // event was missed.
-                    _ducked = false;
-                    try {
-                      await _setNormalVolume();
-                    } catch (_) {}
-                  },
-                );
-              }
-              break;
-            case AudioInterruptionType.pause:
-            case AudioInterruptionType.unknown:
-              _resumeAfterInterruption = player.playing;
-              await player.pause();
-              break;
-          }
-          return;
-        }
-
-        // Interruption ends.
-        switch (event.type) {
-          case AudioInterruptionType.duck:
-            if (_ducked) {
-              _ducked = false;
-              _duckStartedAt = null;
-              _duckFailsafeTimer?.cancel();
-              _duckFailsafeTimer = null;
-              await _setNormalVolume();
-            }
-            break;
-          case AudioInterruptionType.pause:
-          case AudioInterruptionType.unknown:
-            if (_resumeAfterInterruption) {
-              _resumeAfterInterruption = false;
-              try {
-                await Future<void>.delayed(const Duration(milliseconds: 250));
-                await _session?.setActive(true);
-              } catch (_) {}
-              // Ensure volume is restored before resuming.
-              try {
-                await _setNormalVolume();
-              } catch (_) {}
-              await player.play();
-              _lastPlaybackProgressAt = DateTime.now();
-              _lastPlaybackPosition = player.position;
-            }
-            break;
-        }
-      });
+      _interruptionSub ??= session.interruptionEventStream.listen(
+        _handleInterruption,
+      );
     } catch (_) {
       // Ignore: audio session not available on some platforms.
     }
   }
+
+  void _handleInterruption(AudioInterruptionEvent event) async {
+    // ── Interruption begins ──────────────────────────────────────────
+    if (event.begin) {
+      switch (event.type) {
+        case AudioInterruptionType.duck:
+          if (!_ducked) {
+            _duckStartedAt = DateTime.now();
+            _baselineVolume = player.volume.clamp(0.0, 1.0);
+            if (_baselineVolume <= 0.001) _baselineVolume = 1.0;
+
+            _preDuckVolume = _baselineVolume;
+            _ducked = true;
+            _setFocusState(AudioFocusState.ducked);
+
+            var duckVol = (_preDuckVolume * 0.2);
+            if (duckVol < 0.08) duckVol = 0.08;
+            if (duckVol > 1.0) duckVol = 1.0;
+            await player.setVolume(duckVol);
+
+            _duckFailsafeTimer?.cancel();
+            _duckFailsafeTimer = Timer(
+              const Duration(seconds: 20),
+              () async {
+                if (!_ducked) return;
+                _ducked = false;
+                _setFocusState(AudioFocusState.gained);
+                try {
+                  await _setNormalVolume();
+                } catch (_) {}
+              },
+            );
+          }
+          break;
+
+        case AudioInterruptionType.pause:
+        case AudioInterruptionType.unknown:
+          // Pause the player and start a timer. If the "end" event
+          // doesn't arrive within permanentLossTimeout, treat this as
+          // AUDIOFOCUS_LOSS (permanent) rather than LOSS_TRANSIENT.
+          if (player.playing) {
+            await player.pause();
+          }
+          _setFocusState(AudioFocusState.transientLoss);
+
+          // Start permanent-loss detection timer.
+          _permanentLossTimer?.cancel();
+          _permanentLossTimer = Timer(permanentLossTimeout, () {
+            // No "end" event arrived — this is permanent focus loss.
+            _setFocusState(AudioFocusState.permanentLoss);
+            debugPrint(
+              'Audio focus: permanent loss detected (no end event within '
+              '${permanentLossTimeout.inSeconds}s). Stopping player.',
+            );
+            // Abandon audio focus entirely.
+            try {
+              _session?.setActive(false);
+            } catch (_) {}
+          });
+          break;
+      }
+      return;
+    }
+
+    // ── Interruption ends ────────────────────────────────────────────
+    switch (event.type) {
+      case AudioInterruptionType.duck:
+        if (_ducked) {
+          _ducked = false;
+          _duckStartedAt = null;
+          _duckFailsafeTimer?.cancel();
+          _duckFailsafeTimer = null;
+          _setFocusState(AudioFocusState.gained);
+          await _setNormalVolume();
+        }
+        break;
+
+      case AudioInterruptionType.pause:
+      case AudioInterruptionType.unknown:
+        _permanentLossTimer?.cancel();
+        _permanentLossTimer = null;
+
+        // Only resume if this was a transient loss (not permanent).
+        if (_focusState == AudioFocusState.transientLoss) {
+          try {
+            await Future<void>.delayed(const Duration(milliseconds: 250));
+            await _session?.setActive(true);
+          } catch (_) {}
+          try {
+            await _setNormalVolume();
+          } catch (_) {}
+          await player.play();
+          _lastPlaybackProgressAt = DateTime.now();
+          _lastPlaybackPosition = player.position;
+        }
+        _setFocusState(AudioFocusState.gained);
+        break;
+    }
+  }
+
+  // ── Playback lifecycle ─────────────────────────────────────────────
 
   Future<void> disposePlayer() async {
     _positionUpdateTimer?.cancel();
     _positionUpdateTimer = null;
     _duckFailsafeTimer?.cancel();
     _duckFailsafeTimer = null;
+    _permanentLossTimer?.cancel();
+    _permanentLossTimer = null;
     await _playerStateSub?.cancel();
     await _currentIndexSub?.cancel();
     await _sequenceStateSub?.cancel();
@@ -250,11 +316,11 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await _loopSub?.cancel();
     await _interruptionSub?.cancel();
     await _becomingNoisySub?.cancel();
+    await _audioFocusStateController.close();
     await player.dispose();
   }
 
   void _syncPositionTimer() {
-    // Battery optimization: update occasionally while playing.
     if (player.playing) {
       _positionUpdateTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
         _recordPlaybackProgress();
@@ -289,6 +355,8 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return null;
   }
 
+  // ── Notification / broadcast ───────────────────────────────────────
+
   AudioProcessingState _mapProcessingState(ProcessingState state) {
     switch (state) {
       case ProcessingState.idle:
@@ -319,7 +387,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final shuffleEnabled = player.shuffleModeEnabled;
     final loopMode = player.loopMode;
 
-    // Requirement: loop button converts to an X only when paused.
     final rightButton = !player.playing
         ? MediaControl.custom(
             androidIcon: 'drawable/ic_close',
@@ -342,7 +409,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     return [
       MediaControl.custom(
-        // Make shuffle state obvious at a glance.
         androidIcon: shuffleEnabled
             ? 'drawable/ic_shuffle_on'
             : 'drawable/ic_shuffle_off',
@@ -358,12 +424,10 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   void _broadcastState() {
     if (_suspendStateUpdates) return;
-    final event = player.playbackEvent;
 
     playbackState.add(
       playbackState.value.copyWith(
         controls: _notificationControls(),
-        // Compact view shows status controls: shuffle + play/pause + loop-or-close.
         androidCompactActionIndices: const [0, 2, 4],
         systemActions: const {MediaAction.seek},
         processingState: _mapProcessingState(player.processingState),
@@ -371,7 +435,7 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         updatePosition: player.position,
         bufferedPosition: player.bufferedPosition,
         speed: player.speed,
-        queueIndex: event.currentIndex,
+        queueIndex: player.currentIndex,
         repeatMode: _repeatModeFromLoop(player.loopMode),
         shuffleMode: player.shuffleModeEnabled
             ? AudioServiceShuffleMode.all
@@ -389,11 +453,23 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  // ── Transport controls ─────────────────────────────────────────────
+
   @override
   Future<void> play() async {
-    try {
-      await _session?.setActive(true);
-    } catch (_) {}
+    // If we lost focus permanently, re-acquire it before playing.
+    if (_focusState == AudioFocusState.permanentLoss) {
+      try {
+        final regained = await _session?.setActive(true);
+        if (regained == true || regained == null) {
+          _setFocusState(AudioFocusState.gained);
+        }
+      } catch (_) {}
+    } else {
+      try {
+        await _session?.setActive(true);
+      } catch (_) {}
+    }
     return player.play();
   }
 
@@ -414,6 +490,7 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     try {
       await _session?.setActive(false);
     } catch (_) {}
+    _setFocusState(AudioFocusState.permanentLoss);
     return super.stop();
   }
 
@@ -425,8 +502,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> skipToPrevious() async {
-    // UX: If the user is more than N seconds into a track, "previous" restarts
-    // the current track. Otherwise it moves to the previous track.
     final pos = player.position;
     if (pos > _restartTrackThreshold) {
       await player.seek(Duration.zero);
@@ -468,7 +543,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         _broadcastState();
         break;
       case _actionCloseApp:
-        // Ask the UI isolate to exit (best-effort) and stop the service.
         customEvent.add(<String, dynamic>{'type': 'exit'});
         await stop();
         break;
@@ -476,3 +550,4 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return super.customAction(name, extras);
   }
 }
+
