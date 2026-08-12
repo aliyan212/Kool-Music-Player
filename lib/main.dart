@@ -711,6 +711,34 @@ Widget buildDetailBottomBars({
   );
 }
 
+/// Reserves scrollable space at the bottom of list pages so the last item can
+/// be scrolled fully above the mini-player and the navigation bar, which are
+/// overlaid on top of the body via `extendBody: true`.
+///
+/// The gutter grows when a song is loaded (mini-player visible) so the last
+/// row is never hidden behind the player.
+Widget buildBottomBarsGutter(
+  BuildContext context, {
+  bool includeMiniPlayer = true,
+}) {
+  // 66px themed NavigationBar + breathing room.
+  const double navBarReserve = 74;
+  // 80px mini-player + 6px bottom margin.
+  const double miniPlayerReserve = 86;
+  final double bottomInset = MediaQuery.of(context).padding.bottom;
+  return SliverToBoxAdapter(
+    child: ValueListenableBuilder<int?>(
+      valueListenable: playbackController.currentSongIdNotifier,
+      builder: (context, songId, _) {
+        final double gutter = bottomInset +
+            navBarReserve +
+            (includeMiniPlayer && songId != null ? miniPlayerReserve : 0);
+        return SizedBox(height: gutter);
+      },
+    ),
+  );
+}
+
 Widget _frostedBarBackground(BuildContext ctx, {double? opacity}) {
   final cs = Theme.of(ctx).colorScheme;
   final isDark = Theme.of(ctx).brightness == Brightness.dark;
@@ -4400,7 +4428,7 @@ void _recomputeAllData() {
               );
             }, childCount: _songs.length),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 18)),
+          buildBottomBarsGutter(context),
         ],
         ),
       ),
@@ -4600,7 +4628,7 @@ void _recomputeAllData() {
                 );
               }, childCount: artists.length),
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 18)),
+          buildBottomBarsGutter(context),
         ],
         ),
       ),
@@ -4836,7 +4864,7 @@ void _recomputeAllData() {
                 );
               }, childCount: albums.length),
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 18)),
+          buildBottomBarsGutter(context),
           ],
         ),
       ),
@@ -5196,12 +5224,7 @@ void _recomputeAllData() {
               ],
             ),
           ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height:
-                  MediaQuery.of(context).padding.bottom + 160,
-            ),
-          ),
+          buildBottomBarsGutter(context),
         ],
       ),
     );
@@ -5680,7 +5703,10 @@ class ArtistPage extends StatefulWidget {
               );
             },
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 18)),
+          if (embeddedInHome)
+            buildBottomBarsGutter(context)
+          else
+            const SliverToBoxAdapter(child: SizedBox(height: 18)),
         ],
       );
 
@@ -6047,7 +6073,10 @@ class AlbumPage extends StatefulWidget {
                       );
                     },
                   ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 18)),
+                  if (embeddedInHome)
+                    buildBottomBarsGutter(context)
+                  else
+                    const SliverToBoxAdapter(child: SizedBox(height: 18)),
                 ],
               ),
             ],
@@ -6363,7 +6392,10 @@ class _SmartPlaylistPage extends StatelessWidget {
                 );
               }, childCount: songs.length),
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 18)),
+          if (embeddedInHome)
+            buildBottomBarsGutter(context)
+          else
+            const SliverToBoxAdapter(child: SizedBox(height: 18)),
         ],
       );
 
@@ -7572,7 +7604,10 @@ class _UserPlaylistPageState extends State<_UserPlaylistPage> {
               itemCount: songs.length,
               onReorder: canReorder ? _reorderVisible : (a, b) {},
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 18)),
+          if (widget.embeddedInHome)
+            buildBottomBarsGutter(context)
+          else
+            const SliverToBoxAdapter(child: SizedBox(height: 18)),
         ],
       );
 
