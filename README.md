@@ -51,7 +51,7 @@ It is designed primarily for Android, with support for other Flutter targets whe
 </p>
 <p align="center">
   <img src="assets/screenshots/now-playing.png" alt="Now Playing Screen" width="30%" />
-  <img src="assets/screenshots/full-now-playing.png" alt="Full Screen Now Playing" width="30%" />
+  <img src="assets/screenshots/full-now-playing.png" alt="Full Screen Now Playing" width="100%" />
 </p>
 
 ## Tech stack
