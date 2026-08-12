@@ -45,17 +45,13 @@ It is designed primarily for Android, with support for other Flutter targets whe
 
 ## Screenshots
 
-> Add your screenshots to `/assets/screenshots/` and keep the same filenames to render this gallery.
-
 <p align="center">
-  <img src="assets/screenshots/home.jpg" alt="Home screen" width="30%" />
-  <img src="assets/screenshots/now-playing.jpg" alt="Now playing screen" width="30%" />
-  <img src="assets/screenshots/library.jpg" alt="Library screen" width="30%" />
+  <img src="assets/screenshots/home.png" alt="Home Screen" width="30%" />
+  <img src="assets/screenshots/playlist.png" alt="Playlist Screen" width="30%" />
 </p>
 <p align="center">
-  <img src="assets/screenshots/lyrics.jpg" alt="Lyrics editor screen" width="30%" />
-  <img src="assets/screenshots/playlist.jpg" alt="Playlist screen" width="30%" />
-  <img src="assets/screenshots/search.jpg" alt="Search screen" width="30%" />
+  <img src="assets/screenshots/now-playing.png" alt="Now Playing Screen" width="30%" />
+  <img src="assets/screenshots/full-now-playing.png" alt="Full Screen Now Playing" width="30%" />
 </p>
 
 ## Tech stack
@@ -104,7 +100,6 @@ flutter test
 
 - **Android:** primary platform and best-supported experience
 - **Web:** playback works, but direct file/tag editing is limited by browser file access constraints
-- **Desktop:** playback is available, library/file behavior depends on platform permission models
 
 ## Permissions (Android)
 
