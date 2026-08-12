@@ -1,40 +1,117 @@
-# music_player
+# Kool Music Player
 
-A Flutter music player focused on on-device playback.
+A sleek Flutter music player built for **offline, on-device listening** with a fast library experience and clean playback controls.
 
-This app scans your local music library, lets you browse by songs/albums/artists, and plays audio via `just_audio` + `audio_service` (background playback + media controls).
+<p align="center">
+  <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="Kool Music Player app icon" width="120" />
+</p>
 
-## Features
+---
 
-- Library browsing: songs, albums, artists
-- Search across library
-- Background playback with system media controls / notifications
-- Queue + mini player
-- Lyrics support (plain text + synced LRC)
-- Basic tag editing (title/artist/album/cover art)
-- Dynamic colors (Material You on supported Android devices + artwork palette)
+## What this project is
 
-## Platform notes
+Kool Music Player scans local audio files and turns them into a polished listening experience focused on:
 
-- Android is the primary target.
-- Web builds: tag/cover editing is disabled (no direct file access).
-- Desktop builds: playback works, but library scanning behavior may vary depending on platform/file access.
+- quick navigation through large libraries
+- stable playback with queue support
+- lyrics and metadata editing
+- modern visuals with dynamic theming
 
-## Permissions
+It is designed primarily for Android, with support for other Flutter targets where platform capabilities allow.
 
-- Library scanning uses Android runtime permissions (`Permission.audio` / `Permission.storage`).
-- Android 13+: the app may request notification permission so media controls can appear.
-- Tag editing on Android 11+: writing tags typically requires “All files access” (`MANAGE_EXTERNAL_STORAGE`).
+## Highlights
 
-## Run locally
+### Library & discovery
+- Browse by **Songs**, **Albums**, and **Artists**
+- Built-in global search
+- Album/artist-aware sorting modes
+- Smart sections such as **Most Played**, **Recently Played**, and **Recently Added**
 
-Prereqs: Flutter SDK installed.
+### Playback experience
+- Background playback via `audio_service`
+- Lock-screen / notification media controls
+- Full queue management and mini player
+- Shuffle, repeat, seek, and transport controls
+
+### Personalization
+- **Material You / Dynamic Color** integration on supported Android devices
+- Artwork-based palette accents
+- Theme mode support
+
+### Editing & organization
+- Lyrics support for plain text and synchronized **LRC**
+- Tag editing for title, artist, album, and cover art
+- User playlists with create, rename, delete, and import flow
+
+## Screenshots
+
+> Add your screenshots to `/assets/screenshots/` and keep the same filenames to render this gallery.
+
+<p align="center">
+  <img src="assets/screenshots/home.jpg" alt="Home screen" width="30%" />
+  <img src="assets/screenshots/now-playing.jpg" alt="Now playing screen" width="30%" />
+  <img src="assets/screenshots/library.jpg" alt="Library screen" width="30%" />
+</p>
+<p align="center">
+  <img src="assets/screenshots/lyrics.jpg" alt="Lyrics editor screen" width="30%" />
+  <img src="assets/screenshots/playlist.jpg" alt="Playlist screen" width="30%" />
+  <img src="assets/screenshots/search.jpg" alt="Search screen" width="30%" />
+</p>
+
+## Tech stack
+
+- **Framework:** Flutter (Dart)
+- **Audio:** `just_audio`, `audio_service`, `audio_session`
+- **Library query:** `on_audio_query`
+- **Storage:** `hive_flutter`, `shared_preferences`
+- **Theming & UI:** `dynamic_color`, `palette_generator`, `google_fonts`
+- **Utilities:** `permission_handler`, `file_picker`, `audiotags`
+
+## Project structure
+
+```text
+lib/
+├── main.dart                  # App shell, routing, major pages
+├── services/                  # Playback and local persistence services
+├── data/                      # Models and data-layer helpers
+├── pages/                     # Route-level screens (e.g., queue page)
+├── dialogs/                   # Lyrics/tag editing dialogs
+├── widgets/                   # Reusable playback/search UI components
+└── ui/shared/                 # Shared visual components
+```
+
+## Getting started
+
+### Prerequisites
+- Flutter SDK installed
+- Android SDK / emulator (recommended target)
+
+### Run locally
 
 ```bash
 flutter pub get
 flutter run
 ```
 
-## Project structure
+### Basic quality checks
 
-`lib/main.dart` is the app entrypoint. Larger UI/components are being split into `lib/dialogs/`, `lib/widgets/`, and `lib/utils/` to keep changes reviewable.
+```bash
+flutter analyze
+flutter test
+```
+
+## Platform notes
+
+- **Android:** primary platform and best-supported experience
+- **Web:** playback works, but direct file/tag editing is limited by browser file access constraints
+- **Desktop:** playback is available, library/file behavior depends on platform permission models
+
+## Permissions (Android)
+
+- Music library access (`Permission.audio` / storage permission variants)
+- Notification permission on Android 13+ for background media controls
+- `MANAGE_EXTERNAL_STORAGE` may be required for certain metadata/tag write operations on newer Android versions
+
+## Status
+
+This project is actively being improved with UI refinements, playback reliability enhancements, and richer playlist/metadata workflows.
