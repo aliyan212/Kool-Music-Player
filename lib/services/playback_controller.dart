@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -34,18 +33,11 @@ class PlaybackController {
       _player.shuffleModeEnabledStream;
   Stream<LoopMode> get loopModeStream => _player.loopModeStream;
 
-  /// Stream that emits only the [playing] boolean from the native player.
-  /// Use this in [StreamBuilder]s to keep UI in sync with actual playback
-  /// state (never falls out of sync after audio focus changes).
-  Stream<bool> get playingStream =>
-      _player.playerStateStream.map((s) => s.playing).distinct();
-
   // ── Properties ─────────────────────────────────────────────────────
   bool get playing => _player.playing;
   ProcessingState get processingState => _player.processingState;
   int? get currentIndex => _player.currentIndex;
   List<IndexedAudioSource>? get sequence => _player.sequence;
-  SequenceState? get sequenceState => _player.sequenceState;
   AudioSource? get audioSource => _player.audioSource;
   Duration? get position => _player.position;
   Duration? get duration => _player.duration;
@@ -546,11 +538,6 @@ class PlaybackController {
 
   static final RegExp _yearRegex = RegExp(r'(19|20)\d{2}');
 
-  /// Enriched year cache populated after initial song load.
-  /// Maps song ID → real year from audiotags for songs where MediaStore
-  /// returned 0 (e.g. TDRC frames instead of TYER).
-  final Map<int, int> enrichedYearBySongId = <int, int>{};
-
   static int _cs(String a, String b) => _compareSortStrings(a, b);
 
   static int _compareSortStrings(String a, String b) {
@@ -573,42 +560,16 @@ class PlaybackController {
     return t;
   }
 
-  /// Extracts the best available year for [s], checking enriched cache first.
   int _yearFromSong(SongModel s) {
-    // 1. Check enriched cache (populated by audiotags fallback after load).
-    final cached = enrichedYearBySongId[s.id];
-    if (cached != null && cached > 0) return cached;
-
-    // 2. Check MediaStore year field.
     final v = s.getMap['year'];
-    if (v != null) {
-      if (v is int) {
-        if (v > 0) return v;
-      } else {
-        final raw = v.toString();
-        final direct = int.tryParse(raw);
-        if (direct != null && direct > 0) return direct;
-        final match = _yearRegex.firstMatch(raw);
-        if (match != null) {
-          final parsed = int.tryParse(match.group(0)!);
-          if (parsed != null && parsed > 0) return parsed;
-        }
-      }
-    }
-
-    // 3. Try other date fields as last-resort fallback.
-    for (final key in ['date', 'date_modified', 'year_orig']) {
-      final alt = s.getMap[key];
-      if (alt != null) {
-        final match = _yearRegex.firstMatch(alt.toString());
-        if (match != null) {
-          final parsed = int.tryParse(match.group(0)!);
-          if (parsed != null && parsed > 0) return parsed;
-        }
-      }
-    }
-
-    return 0;
+    if (v == null) return 0;
+    if (v is int) return v;
+    final raw = v.toString();
+    final direct = int.tryParse(raw);
+    if (direct != null) return direct;
+    final match = _yearRegex.firstMatch(raw);
+    if (match == null) return 0;
+    return int.tryParse(match.group(0)!) ?? 0;
   }
 
   int _yearForCompare(SongModel s) {
