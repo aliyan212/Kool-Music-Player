@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -26,6 +27,7 @@ class PlaybackController {
   // ── Streams ────────────────────────────────────────────────────────
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
   Stream<int?> get currentIndexStream => _player.currentIndexStream;
+  SequenceState? get sequenceState => _player.sequenceState;
   Stream<SequenceState?> get sequenceStateStream =>
       _player.sequenceStateStream;
   Stream<Duration> get positionStream => _player.positionStream;

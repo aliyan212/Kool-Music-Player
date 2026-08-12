@@ -831,8 +831,7 @@ enum _PlaylistShareAction { copyList, copyM3u, exportM3u }
 
 enum _AppMenuAction {
   refresh,
-  includeFolders,
-  excludeFolders,
+  manageFolders,
   toggleTheme,
   about,
   quit,
@@ -2157,7 +2156,6 @@ void _recomputeAllData() {
         uriType: UriType.EXTERNAL,
         ignoreCase: true,
       );
-      rawSongs = await repairSongMetadataList(rawSongs);
 
       List<AlbumModel> albums = await _audioQuery.queryAlbums();
 
@@ -2577,125 +2575,173 @@ void _recomputeAllData() {
     }
   }
 
-  void _showIncludeFoldersDialog() {
-    final selected = Set<String>.from(_includedFolders);
+  static const List<String> _commonFolders = [
+    '/storage/emulated/0/Music/',
+    '/storage/emulated/0/Download/',
+    '/storage/emulated/0/Podcasts/',
+    '/storage/emulated/0/Ringtones/',
+    '/storage/emulated/0/Alarms/',
+    '/storage/emulated/0/Notifications/',
+    '/storage/emulated/0/Recordings/',
+    '/storage/emulated/0/DCIM/',
+    '/storage/emulated/0/Movies/',
+    '/storage/emulated/0/Pictures/',
+  ];
+
+  String _commonFolderDisplayName(String path) {
+    final trimmed = path.endsWith('/') ? path.substring(0, path.length - 1) : path;
+    final parts = trimmed.split('/').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return trimmed;
+    return parts.last;
+  }
+
+  void _showManageFoldersDialog() {
+    final included = Set<String>.from(_includedFolders);
+    final excluded = Set<String>.from(_excludedFolders);
+    int _activeTab = 0;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) {
-        final cs = Theme.of(context).colorScheme;
+      builder: (ctx) {
         return SafeArea(
           child: StatefulBuilder(
-            builder: (context, setModalState) {
+            builder: (ctx, setModalState) {
+              final cs = Theme.of(ctx).colorScheme;
               return SizedBox(
-                height: MediaQuery.of(context).size.height * 0.75,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Row(
-                        children: [
-                          Text(
-                            "Included folders",
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const Spacer(),
-                          Text(
-                            "${selected.length}",
-                            style: Theme.of(context).textTheme.labelLarge,
-                          ),
+                height: MediaQuery.of(ctx).size.height * 0.8,
+                child: DefaultTabController(
+                  length: 2,
+                  child: Column(
+                    children: [
+                      TabBar(
+                        onTap: (i) => _activeTab = i,
+                        labelColor: cs.primary,
+                        unselectedLabelColor: cs.onSurfaceVariant,
+                        tabs: const [
+                          Tab(icon: Icon(Icons.folder_open_rounded), text: 'Included'),
+                          Tab(icon: Icon(Icons.folder_off_rounded), text: 'Excluded'),
                         ],
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                      child: Text(
-                        'Only songs inside these folders (and subfolders) are included. '
-                        'If empty, all folders are included.',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        child: Text(
+                          'Quick-add common folders:',
+                          style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                        ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.folder_open),
-                              label: const Text("Add folder"),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: _commonFolders.map((folder) {
+                            return ActionChip(
+                              avatar: const Icon(Icons.folder, size: 18),
+                              label: Text(
+                                _commonFolderDisplayName(folder),
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              onPressed: () {
+                                setModalState(() {
+                                  if (_activeTab == 0) {
+                                    included.add(folder);
+                                  } else {
+                                    excluded.add(folder);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.folder_open, size: 18),
+                                label: const Text("Browse folder…"),
+                                onPressed: () async {
+                                  final folder = await FilePicker.platform.getDirectoryPath();
+                                  if (folder == null) return;
+                                  final normalized = _normalizeFolderPath(folder);
+                                  setModalState(() {
+                                    if (_activeTab == 0) {
+                                      included.add(normalized);
+                                    } else {
+                                      excluded.add(normalized);
+                                    }
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: TabBarView(
+                          children: [
+                            // ── Included tab ──
+                            _buildFolderTab(
+                              ctx,
+                              setModalState,
+                              folders: included,
+                              otherFolders: excluded,
+                              title: 'Included folders',
+                              emptyLabel: 'No folders included — all songs are shown.',
+                              description:
+                                  'Only songs inside these folders (and subfolders) are shown.',
+                              isIncluded: true,
+                              onClear: () => setModalState(() => included.clear()),
+                            ),
+                            // ── Excluded tab ──
+                            _buildFolderTab(
+                              ctx,
+                              setModalState,
+                              folders: excluded,
+                              otherFolders: included,
+                              title: 'Excluded folders',
+                              emptyLabel: 'No folders excluded.',
+                              description:
+                                  'Songs inside these folders are hidden from the library.',
+                              isIncluded: false,
+                              onClear: () => setModalState(() => excluded.clear()),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        child: Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text("Cancel"),
+                            ),
+                            const Spacer(),
+                            FilledButton(
                               onPressed: () async {
-                                final folder =
-                                    await FilePicker.platform.getDirectoryPath();
-                                if (folder == null) return;
-                                final normalized = _normalizeFolderPath(folder);
-                                setModalState(
-                                  () => selected.add(normalized),
-                                );
+                                Navigator.pop(ctx);
+                                setState(() {
+                                  _includedFolders = included;
+                                  _excludedFolders = excluded;
+                                });
+                                await _saveIncludedFolders(_includedFolders);
+                                await _saveExcludedFolders(_excludedFolders);
+                                await loadMusic();
                               },
+                              child: const Text("Save"),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          OutlinedButton(
-                            onPressed: selected.isEmpty
-                                ? null
-                                : () => setModalState(() => selected.clear()),
-                            child: const Text("Clear"),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: selected.isEmpty
-                          ? const Center(child: Text("No folders included"))
-                          : ListView.builder(
-                              itemCount: selected.length,
-                              itemBuilder: (context, index) {
-                                final folder = selected.elementAt(index);
-                                return ListTile(
-                                  leading: const Icon(Icons.folder),
-                                  title: Text(_folderDisplayName(folder)),
-                                  subtitle: Text(
-                                    folder.endsWith('/')
-                                        ? folder.substring(0, folder.length - 1)
-                                        : folder,
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.close),
-                                    onPressed: () => setModalState(
-                                      () => selected.remove(folder),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: Row(
-                        children: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text("Cancel"),
-                          ),
-                          const Spacer(),
-                          FilledButton(
-                            onPressed: () async {
-                              Navigator.pop(context);
-                              setState(() => _includedFolders = selected);
-                              await _saveIncludedFolders(_includedFolders);
-                              await loadMusic();
-                            },
-                            child: const Text("Save"),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             },
@@ -2705,117 +2751,90 @@ void _recomputeAllData() {
     );
   }
 
-  void _showExcludeFoldersDialog() {
-    final selected = Set<String>.from(_excludedFolders);
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: StatefulBuilder(
-            builder: (context, setModalState) {
-              return SizedBox(
-                height: MediaQuery.of(context).size.height * 0.75,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Row(
-                        children: [
-                          Text(
-                            "Excluded folders",
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const Spacer(),
-                          Text(
-                            "${selected.length}",
-                            style: Theme.of(context).textTheme.labelLarge,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.folder_open),
-                              label: const Text("Add folder"),
-                              onPressed: () async {
-                                final folder = await FilePicker.platform
-                                    .getDirectoryPath();
-                                if (folder == null) return;
-                                final normalized = _normalizeFolderPath(folder);
-                                setModalState(() => selected.add(normalized));
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          OutlinedButton(
-                            onPressed: selected.isEmpty
-                                ? null
-                                : () => setModalState(() => selected.clear()),
-                            child: const Text("Clear"),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: selected.isEmpty
-                          ? const Center(child: Text("No folders excluded"))
-                          : ListView.builder(
-                              itemCount: selected.length,
-                              itemBuilder: (context, index) {
-                                final folder = selected.elementAt(index);
-                                return ListTile(
-                                  leading: const Icon(Icons.folder),
-                                  title: Text(_folderDisplayName(folder)),
-                                  subtitle: Text(
-                                    folder.endsWith('/')
-                                        ? folder.substring(0, folder.length - 1)
-                                        : folder,
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.close),
-                                    onPressed: () => setModalState(
-                                      () => selected.remove(folder),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: Row(
-                        children: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text("Cancel"),
-                          ),
-                          const Spacer(),
-                          FilledButton(
-                            onPressed: () async {
-                              Navigator.pop(context);
-                              setState(() => _excludedFolders = selected);
-                              await _saveExcludedFolders(_excludedFolders);
-                              await loadMusic();
-                            },
-                            child: const Text("Save"),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+  Widget _buildFolderTab(
+    BuildContext ctx,
+    StateSetter setModalState, {
+    required Set<String> folders,
+    required Set<String> otherFolders,
+    required String title,
+    required String emptyLabel,
+    required String description,
+    required bool isIncluded,
+    required VoidCallback onClear,
+  }) {
+    final cs = Theme.of(ctx).colorScheme;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Row(
+            children: [
+              Text(title, style: Theme.of(ctx).textTheme.titleMedium),
+              const Spacer(),
+              Text('${folders.length}', style: Theme.of(ctx).textTheme.labelLarge),
+            ],
           ),
-        );
-      },
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            description,
+            style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: folders.isEmpty ? null : onClear,
+              child: const Text("Clear all"),
+            ),
+          ),
+        ),
+        Expanded(
+          child: folders.isEmpty
+              ? Center(child: Text(emptyLabel))
+              : ListView.builder(
+                  itemCount: folders.length,
+                  itemBuilder: (context, index) {
+                    final folder = folders.elementAt(index);
+                    final isAlsoInOther = otherFolders.contains(folder);
+                    return ListTile(
+                      leading: Icon(
+                        isAlsoInOther ? Icons.folder_shared_rounded : Icons.folder_rounded,
+                        color: isAlsoInOther ? cs.tertiary : null,
+                      ),
+                      title: Text(_folderDisplayName(folder)),
+                      subtitle: Text(
+                        folder.endsWith('/') ? folder.substring(0, folder.length - 1) : folder,
+                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isAlsoInOther)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: Icon(
+                                isIncluded ? Icons.block : Icons.check_circle_outline,
+                                size: 18,
+                                color: cs.tertiary,
+                              ),
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 20),
+                            onPressed: () => setModalState(() => folders.remove(folder)),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -3854,11 +3873,8 @@ void _recomputeAllData() {
                       case _AppMenuAction.refresh:
                         loadMusic();
                         break;
-                      case _AppMenuAction.includeFolders:
-                        _showIncludeFoldersDialog();
-                        break;
-                      case _AppMenuAction.excludeFolders:
-                        _showExcludeFoldersDialog();
+                      case _AppMenuAction.manageFolders:
+                        _showManageFoldersDialog();
                         break;
                       case _AppMenuAction.toggleTheme:
                         themeNotifier.toggle();
@@ -3880,17 +3896,10 @@ void _recomputeAllData() {
                       ),
                     ),
                     PopupMenuItem(
-                      value: _AppMenuAction.includeFolders,
+                      value: _AppMenuAction.manageFolders,
                       child: menuLabel(
-                        Icons.folder_open_rounded,
-                        'Include Folders',
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: _AppMenuAction.excludeFolders,
-                      child: menuLabel(
-                        Icons.folder_off_rounded,
-                        'Exclude Folders',
+                        Icons.folder_copy_rounded,
+                        'Manage Folders',
                       ),
                     ),
                     PopupMenuItem(
