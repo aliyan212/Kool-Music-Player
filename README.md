@@ -100,7 +100,7 @@ flutter test
 
 - **Android:** primary platform and best-supported experience
 - **Web:** playback works, but direct file/tag editing is limited by browser file access constraints
-- **Linux:** anot quite sure about the compatibility yet, I'm sure the app compiles and would work to some extent, but I plan to bring full support to Linux in the future.
+- **Linux:** not fully compatibility yet, I'm sure the app compiles and would work to some extent, but I plan to bring full support to Linux in the future.
 
 ## Permissions (Android)
 
