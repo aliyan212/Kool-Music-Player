@@ -380,6 +380,16 @@ class PlaybackController {
 
     sortMode = mode;
 
+    final albumYearMap = <String, int>{};
+    for (final s in songs) {
+      final key = _albumKeyFor(s);
+      final y = _yearFromSong(s);
+      if (y > 0) {
+        final cur = albumYearMap[key];
+        if (cur == null || y < cur) albumYearMap[key] = y;
+      }
+    }
+
     songs.sort((a, b) {
       switch (mode) {
         case SortMode.artist:
@@ -387,16 +397,38 @@ class PlaybackController {
           if (c != 0) return c;
           return _cs(a.title, b.title);
         case SortMode.albumArtist:
-          final c = _cs(_albumArtistFor(a), _albumArtistFor(b));
-          if (c != 0) return c;
-          final ac = _cs(a.album ?? '', b.album ?? '');
+          final ac = _cs(_albumArtistFor(a), _albumArtistFor(b));
           if (ac != 0) return ac;
+
+          final keyA = _albumKeyFor(a);
+          final keyB = _albumKeyFor(b);
+          if (keyA == keyB) {
+            final tc = _compareDiscAndTrack(a, b);
+            if (tc != 0) return tc;
+            final tComp = _cs(a.title, b.title);
+            if (tComp != 0) return tComp;
+            return a.id.compareTo(b.id);
+          }
+
+          final alc = _cs(a.album ?? '', b.album ?? '');
+          if (alc != 0) return alc;
           final tc = _compareDiscAndTrack(a, b);
           if (tc != 0) return tc;
           return _cs(a.title, b.title);
         case SortMode.year:
-          final yc = _yearForCompare(a).compareTo(_yearForCompare(b));
-          if (yc != 0) return yc;
+          final keyA = _albumKeyFor(a);
+          final keyB = _albumKeyFor(b);
+          if (keyA == keyB) {
+            final tc = _compareDiscAndTrack(a, b);
+            if (tc != 0) return tc;
+            final tComp = _cs(a.title, b.title);
+            if (tComp != 0) return tComp;
+            return a.id.compareTo(b.id);
+          }
+          final ya = albumYearMap[keyA] ?? 99999;
+          final yb = albumYearMap[keyB] ?? 99999;
+          if (ya != yb) return ya.compareTo(yb);
+
           final ac = _cs(_albumArtistFor(a), _albumArtistFor(b));
           if (ac != 0) return ac;
           final alc = _cs(a.album ?? '', b.album ?? '');
@@ -408,8 +440,21 @@ class PlaybackController {
         default:
           final ac = _cs(_albumArtistFor(a), _albumArtistFor(b));
           if (ac != 0) return ac;
-          final yc = _yearForCompare(a).compareTo(_yearForCompare(b));
-          if (yc != 0) return yc;
+
+          final keyA = _albumKeyFor(a);
+          final keyB = _albumKeyFor(b);
+          if (keyA == keyB) {
+            final tc = _compareDiscAndTrack(a, b);
+            if (tc != 0) return tc;
+            final tComp = _cs(a.title, b.title);
+            if (tComp != 0) return tComp;
+            return a.id.compareTo(b.id);
+          }
+
+          final ya = albumYearMap[keyA] ?? 99999;
+          final yb = albumYearMap[keyB] ?? 99999;
+          if (ya != yb) return ya.compareTo(yb);
+
           final alc = _cs(a.album ?? '', b.album ?? '');
           if (alc != 0) return alc;
           final tc = _compareDiscAndTrack(a, b);
@@ -597,27 +642,63 @@ class PlaybackController {
     return _normalizeSortText(s.artist ?? '');
   }
 
-  int _compareDiscAndTrack(SongModel a, SongModel b) {
-    final aDisc =
-        a.getMap['disc_number'] is int
-            ? a.getMap['disc_number'] as int
-            : 0;
-    final bDisc =
-        b.getMap['disc_number'] is int
-            ? b.getMap['disc_number'] as int
-            : 0;
-    final at = a.track ?? 0;
-    final bt = b.track ?? 0;
+  String _albumKeyFor(SongModel s) {
+    final artist = _albumArtistFor(s);
+    final album = _normalizeSortText(s.album ?? albumMap[s.albumId]?.album ?? '');
+    if (album.isNotEmpty) {
+      return '${artist.toLowerCase()}\u0000${album.toLowerCase()}';
+    }
+    final aid = s.albumId;
+    if (aid != null && aid > 0) return 'id_$aid';
+    return 'song_${s.id}';
+  }
 
-    var ad = aDisc > 0 ? aDisc : (at >= 1000 ? (at ~/ 1000) : 0);
-    var bd = bDisc > 0 ? bDisc : (bt >= 1000 ? (bt ~/ 1000) : 0);
-    if (ad == 0) ad = 1;
-    if (bd == 0) bd = 1;
+  int _discFromSong(SongModel s) {
+    final v = s.getMap['disc_number'];
+    if (v is int && v > 0) return v;
+    if (v != null) {
+      final str = v.toString().trim();
+      final slash = str.indexOf('/');
+      final discStr = slash != -1 ? str.substring(0, slash).trim() : str;
+      final parsed = int.tryParse(discStr);
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    final track = s.track ?? 0;
+    if (track >= 1000) return track ~/ 1000;
+    return 1;
+  }
+
+  int _trackFromSong(SongModel s) {
+    int t = s.track ?? 0;
+    if (t == 0) {
+      final v = s.getMap['track'];
+      if (v is int && v > 0) {
+        t = v;
+      } else if (v != null) {
+        final str = v.toString().trim();
+        final slash = str.indexOf('/');
+        final trackStr = slash != -1 ? str.substring(0, slash).trim() : str;
+        t = int.tryParse(trackStr) ?? 0;
+      }
+    }
+    if (t >= 1000) t = t % 1000;
+    return t;
+  }
+
+  int _compareDiscAndTrack(SongModel a, SongModel b) {
+    final ad = _discFromSong(a);
+    final bd = _discFromSong(b);
     if (ad != bd) return ad.compareTo(bd);
 
-    final an = at >= 1000 ? (at % 1000) : at;
-    final bn = bt >= 1000 ? (bt % 1000) : bt;
-    return (an == 0 ? 99999 : an).compareTo(bn == 0 ? 99999 : bn);
+    final at = _trackFromSong(a);
+    final bt = _trackFromSong(b);
+    final fat = at == 0 ? 99999 : at;
+    final fbt = bt == 0 ? 99999 : bt;
+    if (fat != fbt) return fat.compareTo(fbt);
+
+    final titleComp = _cs(a.title, b.title);
+    if (titleComp != 0) return titleComp;
+    return a.id.compareTo(b.id);
   }
 }
 

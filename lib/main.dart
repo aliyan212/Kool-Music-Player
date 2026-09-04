@@ -804,7 +804,7 @@ class _MyHomePageState extends State<MyHomePage> {
   double? _lastScrollPixels;
   Widget? _inlineDetailContent;
 
-  static final RegExp _yearRegex = RegExp(r'(19|20)\\d{2}');
+  static final RegExp _yearRegex = RegExp(r'\b(19\d{2}|20\d{2})\b');
 
   void _setHideBottomBars(bool hide) {
     if (_hideBottomBars == hide) return;
@@ -894,9 +894,9 @@ void _recomputeAllData() {
     final byId = <int, SongModel>{for (final s in songs) s.id: s};
 
     final artistStatByKey = <String, AlbumArtistStat>{};
-    final representativeByAlbumId = <int, SongModel>{};
-    final trackCountByAlbumId = <int, int>{};
-    final minYearByAlbumId = <int, int>{};
+    final representativeByAlbumKey = <String, SongModel>{};
+    final trackCountByAlbumKey = <String, int>{};
+    final minYearByAlbumKey = <String, int>{};
 
     for (final s in songs) {
       final artistName = _displayArtistName(_albumArtistFor(s));
@@ -906,19 +906,20 @@ void _recomputeAllData() {
         () => AlbumArtistStat(name: artistName),
       );
       artistStat.trackCount++;
-      final artistAlbumId = s.albumId;
-      if (artistAlbumId != null && artistAlbumId > 0) {
-        artistStat.albumIds.add(artistAlbumId);
-      }
 
-      final albumId = s.albumId;
-      if (albumId == null || albumId <= 0) continue;
-      representativeByAlbumId.putIfAbsent(albumId, () => s);
-      trackCountByAlbumId.update(albumId, (v) => v + 1, ifAbsent: () => 1);
+      final albumKey = _albumIdentityKey(s);
+      artistStat.albumIds.add(albumKey.hashCode);
+
+      final existingRep = representativeByAlbumKey[albumKey];
+      if (existingRep == null ||
+          ((existingRep.albumId ?? 0) <= 0 && (s.albumId ?? 0) > 0)) {
+        representativeByAlbumKey[albumKey] = s;
+      }
+      trackCountByAlbumKey.update(albumKey, (v) => v + 1, ifAbsent: () => 1);
       final y = _yearFromSong(s);
       if (y > 0) {
-        final existing = minYearByAlbumId[albumId];
-        if (existing == null || y < existing) minYearByAlbumId[albumId] = y;
+        final existing = minYearByAlbumKey[albumKey];
+        if (existing == null || y < existing) minYearByAlbumKey[albumKey] = y;
       }
     }
 
@@ -966,21 +967,24 @@ void _recomputeAllData() {
       });
 
     final albums =
-        representativeByAlbumId.keys
-            .map((albumId) {
-              final song = representativeByAlbumId[albumId]!;
-              final album = _controller.albumMap[albumId];
-              final title = _displayAlbumTitle(album?.album ?? song.album);
+        representativeByAlbumKey.keys
+            .map((albumKey) {
+              final song = representativeByAlbumKey[albumKey]!;
+              final album = _controller.albumMap[song.albumId];
+              final title = _displayAlbumTitle(song.album ?? album?.album);
               final artist = _displayArtistName(
-                album?.artist ?? _albumArtistFor(song),
+                _albumArtistFor(song),
               );
+              final albumId = (song.albumId != null && song.albumId! > 0)
+                  ? song.albumId!
+                  : song.id;
               return AlbumTabStat(
                 albumId: albumId,
                 representativeSong: song,
                 title: title,
                 artist: artist,
-                trackCount: trackCountByAlbumId[albumId] ?? 0,
-                year: minYearByAlbumId[albumId] ?? 0,
+                trackCount: trackCountByAlbumKey[albumKey] ?? 0,
+                year: minYearByAlbumKey[albumKey] ?? 0,
               );
             })
             .toList(growable: false)
@@ -2158,9 +2162,9 @@ void _recomputeAllData() {
         .where((song) => isIncluded(song.data) && !isExcluded(song.data))
         .toList();
 
-    // Sort: Album Artist → Year (album release) → Album name → Track number
+    // Sort: Album Artist → Album Identity → Year (album release) → Album name → Disc/Track
     // Keep comparisons deterministic (Dart's sort is not stable).
-    final yearRegex = RegExp(r'(19|20)\\d{2}');
+    final yearRegex = RegExp(r'\b(19\d{2}|20\d{2})\b');
 
     String normalize(String v) {
       final t = v.trim();
@@ -2200,38 +2204,7 @@ void _recomputeAllData() {
       return int.tryParse(match.group(0)!) ?? 0;
     }
 
-    int yearForCompare(SongModel s) {
-      final y = yearFromSong(s);
-      return y == 0 ? 99999 : y;
-    }
-
-    int _compareDiscAndTrackLocal(SongModel a, SongModel b) {
-      final aDisc = a.getMap['disc_number'] is int
-          ? a.getMap['disc_number'] as int
-          : 0;
-      final bDisc = b.getMap['disc_number'] is int
-          ? b.getMap['disc_number'] as int
-          : 0;
-      final at = a.track ?? 0;
-      final bt = b.track ?? 0;
-
-      var ad = aDisc > 0 ? aDisc : (at >= 1000 ? (at ~/ 1000) : 0);
-      var bd = bDisc > 0 ? bDisc : (bt >= 1000 ? (bt ~/ 1000) : 0);
-
-      if (ad == 0) ad = 1;
-      if (bd == 0) bd = 1;
-      if (ad != bd) return ad.compareTo(bd);
-
-      final an = at >= 1000 ? (at % 1000) : at;
-      final bn = bt >= 1000 ? (bt % 1000) : bt;
-
-      final finalAt = an == 0 ? 99999 : an;
-      final finalBt = bn == 0 ? 99999 : bn;
-      return finalAt.compareTo(finalBt);
-    }
-
     String albumArtistFor(SongModel s, AlbumModel? album) {
-      // Prefer explicit album_artist tag; fall back to album model or track artist.
       final raw = s.getMap["album_artist"]?.toString();
       final fromSong = normalize(raw ?? '');
       if (fromSong.isNotEmpty) return fromSong;
@@ -2243,6 +2216,74 @@ void _recomputeAllData() {
     String albumFor(SongModel s, AlbumModel? album) =>
         album?.album ?? s.album ?? "";
 
+    String albumKeyFor(SongModel s) {
+      final artist = albumArtistFor(s, albumMap[s.albumId]);
+      final album = normalize(albumFor(s, albumMap[s.albumId]));
+      if (album.isNotEmpty) return '${artist.toLowerCase()}\u0000${album.toLowerCase()}';
+      final aid = s.albumId;
+      if (aid != null && aid > 0) return 'id_$aid';
+      return 'song_${s.id}';
+    }
+
+    int discFromSongLocal(SongModel s) {
+      final v = s.getMap['disc_number'];
+      if (v is int && v > 0) return v;
+      if (v != null) {
+        final str = v.toString().trim();
+        final slash = str.indexOf('/');
+        final discStr = slash != -1 ? str.substring(0, slash).trim() : str;
+        final parsed = int.tryParse(discStr);
+        if (parsed != null && parsed > 0) return parsed;
+      }
+      final track = s.track ?? 0;
+      if (track >= 1000) return track ~/ 1000;
+      return 1;
+    }
+
+    int trackFromSongLocal(SongModel s) {
+      int t = s.track ?? 0;
+      if (t == 0) {
+        final v = s.getMap['track'];
+        if (v is int && v > 0) {
+          t = v;
+        } else if (v != null) {
+          final str = v.toString().trim();
+          final slash = str.indexOf('/');
+          final trackStr = slash != -1 ? str.substring(0, slash).trim() : str;
+          t = int.tryParse(trackStr) ?? 0;
+        }
+      }
+      if (t >= 1000) t = t % 1000;
+      return t;
+    }
+
+    int compareDiscAndTrackLocal(SongModel a, SongModel b) {
+      final ad = discFromSongLocal(a);
+      final bd = discFromSongLocal(b);
+      if (ad != bd) return ad.compareTo(bd);
+
+      final at = trackFromSongLocal(a);
+      final bt = trackFromSongLocal(b);
+      final finalAt = at == 0 ? 99999 : at;
+      final finalBt = bt == 0 ? 99999 : bt;
+      final tc = finalAt.compareTo(finalBt);
+      if (tc != 0) return tc;
+
+      final titleComp = compareSortStrings(a.title, b.title);
+      if (titleComp != 0) return titleComp;
+      return a.id.compareTo(b.id);
+    }
+
+    final albumYearMap = <String, int>{};
+    for (final s in songs) {
+      final key = albumKeyFor(s);
+      final y = yearFromSong(s);
+      if (y > 0) {
+        final cur = albumYearMap[key];
+        if (cur == null || y < cur) albumYearMap[key] = y;
+      }
+    }
+
     songs.sort((a, b) {
       AlbumModel? albumA = albumMap[a.albumId];
       AlbumModel? albumB = albumMap[b.albumId];
@@ -2252,8 +2293,18 @@ void _recomputeAllData() {
       int artistComp = compareSortStrings(albumArtistA, albumArtistB);
       if (artistComp != 0) return artistComp;
 
-      int yearA = yearForCompare(a);
-      int yearB = yearForCompare(b);
+      final keyA = albumKeyFor(a);
+      final keyB = albumKeyFor(b);
+      if (keyA == keyB) {
+        final trackComp = compareDiscAndTrackLocal(a, b);
+        if (trackComp != 0) return trackComp;
+        final titleComp = compareSortStrings(a.title, b.title);
+        if (titleComp != 0) return titleComp;
+        return a.id.compareTo(b.id);
+      }
+
+      int yearA = albumYearMap[keyA] ?? 99999;
+      int yearB = albumYearMap[keyB] ?? 99999;
       if (yearA != yearB) return yearA.compareTo(yearB);
 
       String albumNameA = albumFor(a, albumA);
@@ -2261,7 +2312,7 @@ void _recomputeAllData() {
       int albumCompare = compareSortStrings(albumNameA, albumNameB);
       if (albumCompare != 0) return albumCompare;
 
-      final trackComp = _compareDiscAndTrackLocal(a, b);
+      final trackComp = compareDiscAndTrackLocal(a, b);
       if (trackComp != 0) return trackComp;
 
       final titleComp = compareSortStrings(a.title, b.title);
@@ -2324,32 +2375,64 @@ void _recomputeAllData() {
     return y == 0 ? 99999 : y;
   }
 
+  int _discFromSong(SongModel s) {
+    final v = s.getMap['disc_number'];
+    if (v is int && v > 0) return v;
+    if (v != null) {
+      final str = v.toString().trim();
+      final slash = str.indexOf('/');
+      final discStr = slash != -1 ? str.substring(0, slash).trim() : str;
+      final parsed = int.tryParse(discStr);
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    final track = s.track ?? 0;
+    if (track >= 1000) return track ~/ 1000;
+    return 1;
+  }
+
+  int _trackFromSong(SongModel s) {
+    int t = s.track ?? 0;
+    if (t == 0) {
+      final v = s.getMap['track'];
+      if (v is int && v > 0) {
+        t = v;
+      } else if (v != null) {
+        final str = v.toString().trim();
+        final slash = str.indexOf('/');
+        final trackStr = slash != -1 ? str.substring(0, slash).trim() : str;
+        t = int.tryParse(trackStr) ?? 0;
+      }
+    }
+    if (t >= 1000) t = t % 1000;
+    return t;
+  }
+
   int _compareDiscAndTrack(SongModel a, SongModel b) {
-    final aDisc = a.getMap['disc_number'] is int
-        ? a.getMap['disc_number'] as int
-        : 0;
-    final bDisc = b.getMap['disc_number'] is int
-        ? b.getMap['disc_number'] as int
-        : 0;
-    final at = a.track ?? 0;
-    final bt = b.track ?? 0;
-
-    var ad = aDisc > 0 ? aDisc : (at >= 1000 ? (at ~/ 1000) : 0);
-    var bd = bDisc > 0 ? bDisc : (bt >= 1000 ? (bt ~/ 1000) : 0);
-
-    // Treat missing/0 disc as Disc 1 to align with explicit Disc 1 tags
-    if (ad == 0) ad = 1;
-    if (bd == 0) bd = 1;
-
+    final ad = _discFromSong(a);
+    final bd = _discFromSong(b);
     if (ad != bd) return ad.compareTo(bd);
 
-    final an = at >= 1000 ? (at % 1000) : at;
-    final bn = bt >= 1000 ? (bt % 1000) : bt;
+    final at = _trackFromSong(a);
+    final bt = _trackFromSong(b);
+    final finalAt = at == 0 ? 99999 : at;
+    final finalBt = bt == 0 ? 99999 : bt;
+    final tc = finalAt.compareTo(finalBt);
+    if (tc != 0) return tc;
 
-    // 0 is usually unknown track, push to end
-    final finalAt = an == 0 ? 99999 : an;
-    final finalBt = bn == 0 ? 99999 : bn;
-    return finalAt.compareTo(finalBt);
+    final titleComp = _compareSortStrings(a.title, b.title);
+    if (titleComp != 0) return titleComp;
+    return a.id.compareTo(b.id);
+  }
+
+  String _albumIdentityKey(SongModel s) {
+    final artist = _albumArtistFor(s).toLowerCase();
+    final album = _normalizeSortText(s.album ?? _controller.albumMap[s.albumId]?.album ?? '').toLowerCase();
+    if (album.isNotEmpty) {
+      return '$artist\u0000$album';
+    }
+    final aid = s.albumId;
+    if (aid != null && aid > 0) return 'album_id_$aid';
+    return 'song_id_${s.id}';
   }
 
   int _trackForCompare(SongModel s) {
@@ -5273,12 +5356,11 @@ void _recomputeAllData() {
               ? 'Unknown Artist'
               : song.artist!.trim());
 
-    final albumSongs = _songs.where((s) => s.albumId == albumId).toList();
-    albumSongs.sort((a, b) {
-      final t = _compareDiscAndTrack(a, b);
-      if (t != 0) return t;
-      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-    });
+    // Use album identity key to group tracks with the same album artist + album
+    // name, even if MediaStore assigned different album IDs (e.g. guest features).
+    final targetKey = _albumIdentityKey(song);
+    final albumSongs = _songs.where((s) => _albumIdentityKey(s) == targetKey).toList();
+    albumSongs.sort(_compareDiscAndTrack);
 
     _showInlineDetail(
       AlbumPage(
@@ -5343,23 +5425,18 @@ void _recomputeAllData() {
 
     if (artistSongs.isEmpty) return;
 
-    // Group into albums.
-    final Map<int, List<SongModel>> songsByAlbumId = {};
+    // Group into albums by identity key (albumArtist + albumName) instead of
+    // raw MediaStore albumId to prevent fragmentation from guest features.
+    final Map<String, List<SongModel>> songsByAlbumKey = {};
     for (final s in artistSongs) {
-      final albumId = s.albumId;
-      if (albumId == null || albumId <= 0) continue;
-      (songsByAlbumId[albumId] ??= <SongModel>[]).add(s);
+      final key = _albumIdentityKey(s);
+      (songsByAlbumKey[key] ??= <SongModel>[]).add(s);
     }
 
     final albums = <ArtistAlbum>[];
-    for (final entry in songsByAlbumId.entries) {
-      final albumId = entry.key;
+    for (final entry in songsByAlbumKey.entries) {
       final songs = entry.value;
-      songs.sort((a, b) {
-        final t = _compareDiscAndTrack(a, b);
-        if (t != 0) return t;
-        return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-      });
+      songs.sort(_compareDiscAndTrack);
 
       final title = (songs.first.album ?? '').trim().isEmpty
           ? 'Unknown Album'
@@ -5375,9 +5452,12 @@ void _recomputeAllData() {
         totalMs += (s.duration ?? 0);
       }
 
+      // Use the first song's albumId as the representative for artwork lookups.
+      final repAlbumId = songs.first.albumId ?? 0;
+
       albums.add(
         ArtistAlbum(
-          albumId: albumId,
+          albumId: repAlbumId,
           title: title,
           year: year,
           trackCount: songs.length,
@@ -5387,6 +5467,7 @@ void _recomputeAllData() {
       );
     }
 
+    // Sort artist's albums chronologically by release year.
     albums.sort((a, b) {
       final ay = a.year == 0 ? 9999 : a.year;
       final by = b.year == 0 ? 9999 : b.year;
@@ -5397,10 +5478,12 @@ void _recomputeAllData() {
       return a.albumId.compareTo(b.albumId);
     });
 
-    final albumSongsById = {
-      for (final e in songsByAlbumId.entries)
-        e.key: List<SongModel>.unmodifiable(e.value),
-    };
+    // Build album songs lookup by identity key for Play All.
+    final albumKeyForAlbum = <int, String>{};
+    for (final entry in songsByAlbumKey.entries) {
+      final repId = entry.value.first.albumId ?? 0;
+      albumKeyForAlbum[repId] = entry.key;
+    }
 
     _showInlineDetail(
       ArtistPage(
@@ -5431,15 +5514,10 @@ void _recomputeAllData() {
             : () async {
                 final queue = <SongModel>[];
                 for (final a in albums) {
-                  final list = albumSongsById[a.albumId] ?? const <SongModel>[];
+                  final key = albumKeyForAlbum[a.albumId] ?? '';
+                  final list = songsByAlbumKey[key] ?? const <SongModel>[];
                   final sorted = List<SongModel>.from(list);
-                  sorted.sort((x, y) {
-                    final t = (x.track ?? 0).compareTo(y.track ?? 0);
-                    if (t != 0) return t;
-                    return x.title.toLowerCase().compareTo(
-                      y.title.toLowerCase(),
-                    );
-                  });
+                  sorted.sort(_compareDiscAndTrack);
                   queue.addAll(sorted);
                 }
                 if (queue.isEmpty) return;
@@ -6866,16 +6944,20 @@ class _UserPlaylistPageState extends State<_UserPlaylistPage> {
     return int.tryParse(match.group(0)!) ?? 0;
   }
 
-  int _yearForCompare(SongModel s) {
-    final y = _yearFromSong(s);
-    return y == 0 ? 99999 : y;
-  }
-
   String _albumArtistForSort(SongModel s) {
     final raw = s.getMap["album_artist"]?.toString();
     final fromSong = _normalizeSortText(raw ?? '');
     if (fromSong.isNotEmpty) return fromSong;
     return _normalizeSortText(s.artist ?? '');
+  }
+
+  String _albumIdentityKeyForSort(SongModel s) {
+    final artist = _albumArtistForSort(s).toLowerCase();
+    final album = _normalizeSortText(s.album ?? '').toLowerCase();
+    if (album.isNotEmpty) return '$artist\u0000$album';
+    final aid = s.albumId;
+    if (aid != null && aid > 0) return 'album_id_$aid';
+    return 'song_id_${s.id}';
   }
 
   int _compareDiscAndTrack(SongModel a, SongModel b) {
@@ -6920,6 +7002,25 @@ class _UserPlaylistPageState extends State<_UserPlaylistPage> {
     final visible = _visibleSongIds(
       map,
     ).map((id) => map[id]!).toList(growable: false);
+
+    // Precompute album-level year so all tracks in the same album sort together
+    // regardless of per-track year tag differences.
+    final Map<String, int> albumYearMap = {};
+    for (final s in visible) {
+      final key = _albumIdentityKeyForSort(s);
+      final y = _yearFromSong(s);
+      if (y > 0) {
+        final existing = albumYearMap[key];
+        if (existing == null || y < existing) {
+          albumYearMap[key] = y;
+        }
+      }
+    }
+    int albumYear(SongModel s) {
+      final y = albumYearMap[_albumIdentityKeyForSort(s)] ?? 0;
+      return y == 0 ? 99999 : y;
+    }
+
     final sorted = List<SongModel>.from(visible);
     sorted.sort((a, b) {
       switch (mode) {
@@ -6946,7 +7047,7 @@ class _UserPlaylistPageState extends State<_UserPlaylistPage> {
           if (titleComp != 0) return titleComp;
           return a.id.compareTo(b.id);
         case _PlaylistSort.year:
-          final yearComp = _yearForCompare(a).compareTo(_yearForCompare(b));
+          final yearComp = albumYear(a).compareTo(albumYear(b));
           if (yearComp != 0) return yearComp;
           final artistComp = _compareSortStrings(
             _albumArtistForSort(a),
@@ -6967,7 +7068,7 @@ class _UserPlaylistPageState extends State<_UserPlaylistPage> {
             _albumArtistForSort(b),
           );
           if (artistComp != 0) return artistComp;
-          final yearComp = _yearForCompare(a).compareTo(_yearForCompare(b));
+          final yearComp = albumYear(a).compareTo(albumYear(b));
           if (yearComp != 0) return yearComp;
           final albumComp = _compareSortStrings(a.album ?? "", b.album ?? "");
           if (albumComp != 0) return albumComp;
