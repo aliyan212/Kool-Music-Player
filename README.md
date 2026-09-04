@@ -45,13 +45,20 @@ It is designed primarily for Android, with support for other Flutter targets whe
 
 ## Screenshots
 
+### Mobile Experience
+
 <p align="center">
-  <img src="assets/screenshots/home.png" alt="Home Screen" width="30%" />
-  <img src="assets/screenshots/playlist.png" alt="Playlist Screen" width="30%" />
+  <img src="assets/screenshots/home.png" alt="Library View" width="31%" />
+  <img src="assets/screenshots/playlist.png" alt="Playlist View" width="31%" />
+  <img src="assets/screenshots/now-playing.png" alt="Now Playing View" width="31%" />
 </p>
+
+### Landscape & Synchronized Lyrics
+
+Full-screen listening experience featuring real-time synchronized lyrics and artwork.
+
 <p align="center">
-  <img src="assets/screenshots/now-playing.png" alt="Now Playing Screen" width="30%" />
-  <img src="assets/screenshots/full-now-playing.png" alt="Full Screen Now Playing" width="100%" />
+  <img src="assets/screenshots/full-now-playing.png" alt="Full Screen Synced Lyrics" width="85%" />
 </p>
 
 ## Tech stack
