@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/tag_write_access.dart';
 
 
@@ -403,11 +404,11 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
                                     _newCoverBytes!,
                                     fit: BoxFit.cover,
                                   )
-                                : QueryArtworkWidget(
+                                : FastArtworkWidget(
                                     id: widget.song.id,
                                     type: ArtworkType.AUDIO,
-                                    artworkWidth: 74,
-                                    artworkHeight: 74,
+                                    width: 74,
+                                    height: 74,
                                     keepOldArtwork: true,
                                     artworkFit: BoxFit.cover,
                                     nullArtworkWidget: Icon(

@@ -9,6 +9,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 import '../main.dart';
+import '../ui/shared/fast_artwork_widget.dart';
 
 
 class QueuePage extends StatefulWidget {
@@ -379,11 +380,11 @@ class _QueuePageState extends State<QueuePage> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: QueryArtworkWidget(
+            child: FastArtworkWidget(
               id: song.id,
               type: ArtworkType.AUDIO,
-              artworkWidth: 56,
-              artworkHeight: 56,
+              width: 56,
+              height: 56,
               keepOldArtwork: true,
               nullArtworkWidget: Container(
                 width: 56,
@@ -546,11 +547,11 @@ class _QueuePageState extends State<QueuePage> {
                     ),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: QueryArtworkWidget(
+                      child: FastArtworkWidget(
                         id: song.id,
                         type: ArtworkType.AUDIO,
-                        artworkWidth: 50,
-                        artworkHeight: 50,
+                        width: 50,
+                        height: 50,
                         keepOldArtwork: true,
                         nullArtworkWidget: Container(
                           width: 50,

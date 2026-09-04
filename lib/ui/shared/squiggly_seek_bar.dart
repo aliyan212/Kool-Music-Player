@@ -129,19 +129,21 @@ class _SquigglySeekBarState extends State<SquigglySeekBar>
           },
           child: SizedBox(
             height: 20,
-            child: AnimatedBuilder(
-              animation: Listenable.merge([_animController, _seekBackController]),
-              builder: (context, _) {
-                return CustomPaint(
-                  painter: SquigglePainter(
-                    progress: progress,
-                    phase: _animController.value * 2 * math.pi,
-                    color: widget.isDark ? Colors.white : Colors.black87,
-                    baseColor: widget.isDark ? Colors.white24 : Colors.black26,
-                  ),
-                  child: const SizedBox.expand(),
-                );
-              },
+            child: RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_animController, _seekBackController]),
+                builder: (context, _) {
+                  return CustomPaint(
+                    painter: SquigglePainter(
+                      progress: progress,
+                      phase: _animController.value * 2 * math.pi,
+                      color: widget.isDark ? Colors.white : Colors.black87,
+                      baseColor: widget.isDark ? Colors.white24 : Colors.black26,
+                    ),
+                    child: const SizedBox.expand(),
+                  );
+                },
+              ),
             ),
           ),
         );
@@ -232,9 +234,10 @@ class SquigglePainter extends CustomPainter {
       final thumbY = midHeight + amplitude * math.sin(thumbX * frequency + phase);
 
       final glowPaint = Paint()
-        ..color = color.withOpacity(0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-      canvas.drawCircle(Offset(thumbX, thumbY), 10, glowPaint);
+        ..shader = RadialGradient(
+          colors: [color.withOpacity(0.5), color.withOpacity(0.0)],
+        ).createShader(Rect.fromCircle(center: Offset(thumbX, thumbY), radius: 16));
+      canvas.drawCircle(Offset(thumbX, thumbY), 16, glowPaint);
 
       final thumbPaint = Paint()
         ..color = color

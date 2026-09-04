@@ -80,19 +80,22 @@ void main() {
     expect(repaired['track'], 12);
   });
 
-  test('repairSongMetadataList keeps SongModel objects valid', () {
+  test('repairSongMetadataList keeps SongModel objects valid', () async {
     final list = <SongModel>[
       SongModel({
-        'id': 1,
+        '_id': 1,
         'title': '',
         'artist': '',
         'album': '',
         'album_artist': '',
-        'data': '/storage/emulated/0/Music/Example Song.mp3',
+        '_data': '/storage/emulated/0/Music/Example Song.mp3',
+        '_display_name': 'Example Song.mp3',
+        '_display_name_wo_ext': 'Example Song',
+        '_size': 1234,
       }),
     ];
 
-    final repaired = app.repairSongMetadataList(list, tagTitle: 'Example Song');
+    final repaired = await app.repairSongMetadataList(list, tagTitle: 'Example Song');
     expect(repaired.single.title, 'Example Song');
   });
 }

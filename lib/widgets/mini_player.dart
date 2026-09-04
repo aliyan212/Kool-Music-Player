@@ -16,6 +16,7 @@ import '../android_notifications.dart';
 import '../main.dart';
 import '../pages/queue_page.dart';
 import '../services/playback_controller.dart';
+import '../ui/shared/fast_artwork_widget.dart';
 
 
 class MiniPlayer extends StatefulWidget {

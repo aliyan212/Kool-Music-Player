@@ -13,8 +13,11 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'dart:typed_data';
+import 'dart:ffi';
+import 'package:ffi/ffi.dart';
 import 'package:audiotags/audiotags.dart';
 import 'dart:math' as math;
 import 'package:audio_service/audio_service.dart';
@@ -30,9 +33,11 @@ import 'android_notifications.dart';
 import 'platform_exit.dart';
 import 'services/app_local_store.dart';
 import 'services/playback_controller.dart';
+import 'services/local_audio_scanner.dart';
 import 'data/services/caching_service.dart';
 import 'utils/file_ops.dart';
 import 'utils/palette_compute.dart';
+import 'ui/shared/fast_artwork_widget.dart';
 import 'ui/shared/frosted_card.dart';
 import 'ui/shared/squiggly_seek_bar.dart';
 import 'widgets/now_playing_transport.dart';
@@ -164,6 +169,28 @@ final _appLifecycleObserver = _AppLifecycleObserver();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS)) {
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      try {
+        final setLocale = DynamicLibrary.process().lookupFunction<
+            Int8 Function(Int32, Pointer<Utf8>),
+            int Function(int, Pointer<Utf8>)>('setlocale');
+        final localeC = "C".toNativeUtf8();
+        setLocale(1, localeC);
+        malloc.free(localeC);
+      } catch (e) {
+        debugPrint('Failed to set locale: $e');
+      }
+    }
+    JustAudioMediaKit.ensureInitialized(
+      linux: true,
+      windows: true,
+      macOS: true,
+    );
+  }
   WidgetsBinding.instance.addObserver(_appLifecycleObserver);
   runApp(const _BootApp());
 }
@@ -420,7 +447,8 @@ Future<List<SongModel>> repairSongMetadataList(
   final repaired = <SongModel>[];
   for (final song in songs) {
     final map = Map<dynamic, dynamic>.from(song.getMap);
-    final filePath = song.data.trim();
+    final rawData = map['_data'] ?? map['data'] ?? '';
+    final filePath = rawData.toString().trim();
 
     String? tagTitleValue = tagTitle;
     String? tagArtistValue = tagArtist;
@@ -468,152 +496,7 @@ String formatTime(int? milliseconds) {
   int seconds = totalSeconds % 60;
   return "$minutes:${seconds.toString().padLeft(2, '0')}";
 }
-const int _thumbnailCacheMax = 300;
-const int _highResCacheMax = 10;
 
-String _getArtworkKey(int id, ArtworkType type, int size) =>
-  '${type.name}_${id}_$size';
-
-LinkedHashMap<String, Uint8List?> _artworkCacheForSize(int size) {
-  return size > 400 ? CachingService().highResCache : CachingService().thumbnailCache;
-}
-
-Uint8List? _peekCachedArtworkBytesByKey(String key, int size) {
-  final cache = _artworkCacheForSize(size);
-  if (!cache.containsKey(key)) return null;
-  final cached = cache.remove(key);
-  cache[key] = cached;
-  return cached;
-}
-
-void _storeCachedArtworkBytesByKey(String key, int size, Uint8List? bytes) {
-  final cache = _artworkCacheForSize(size);
-  final maxEntries = size > 400 ? _highResCacheMax : _thumbnailCacheMax;
-  cache.remove(key);
-  cache[key] = bytes;
-  while (cache.length > maxEntries) {
-    cache.remove(cache.keys.first);
-  }
-}
-
-bool hasCachedArtworkBytes(
-  int id, {
-  ArtworkType type = ArtworkType.AUDIO,
-  int size = 200,
-}) {
-  return _artworkCacheForSize(size).containsKey(_getArtworkKey(id, type, size));
-}
-
-Uint8List? peekCachedArtworkBytes(
-  int id, {
-  ArtworkType type = ArtworkType.AUDIO,
-  int size = 200,
-}) {
-  return _peekCachedArtworkBytesByKey(_getArtworkKey(id, type, size), size);
-}
-
-Future<Uint8List?> queryArtworkBytesCached(
-  int id,
-  {
-  ArtworkType type = ArtworkType.AUDIO,
-  int size = 200,
-  int quality = 80,
-  }) async {
-  final key = _getArtworkKey(id, type, size);
-  if (_artworkCacheForSize(size).containsKey(key)) {
-    return _peekCachedArtworkBytesByKey(key, size);
-  }
-  final bytes = await OnAudioQuery().queryArtwork(
-    id,
-    type,
-    size: size,
-    quality: quality,
-  );
-  _storeCachedArtworkBytesByKey(key, size, bytes);
-  return bytes;
-}
-
-class FastArtworkWidget extends StatefulWidget {
-  final int id;
-  final ArtworkType type;
-  final double width;
-  final double height;
-  final Widget nullArtworkWidget;
-  final int size;
-  final int quality;
-
-  const FastArtworkWidget({
-    super.key,
-    required this.id,
-    required this.type,
-    required this.width,
-    required this.height,
-    required this.nullArtworkWidget,
-    this.size = 200,
-    this.quality = 80,
-  });
-
-  @override
-  State<FastArtworkWidget> createState() => _FastArtworkWidgetState();
-}
-
-class _FastArtworkWidgetState extends State<FastArtworkWidget> {
-  Uint8List? _bytes;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchArtwork();
-  }
-
-  @override
-  void didUpdateWidget(covariant FastArtworkWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.id != widget.id || oldWidget.type != widget.type) {
-      _fetchArtwork();
-    }
-  }
-
-  void _fetchArtwork() {
-    final key = _getArtworkKey(widget.id, widget.type, widget.size);
-    if (hasCachedArtworkBytes(widget.id, type: widget.type, size: widget.size)) {
-      _bytes = peekCachedArtworkBytes(widget.id, type: widget.type, size: widget.size);
-      return;
-    }
-
-    queryArtworkBytesCached(
-      widget.id,
-      type: widget.type,
-      size: widget.size,
-      quality: widget.quality,
-    ).then((bytes) {
-      if (!mounted) return;
-      if (_getArtworkKey(widget.id, widget.type, widget.size) != key) return;
-      setState(() {
-        _bytes = bytes;
-      });
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_bytes != null) {
-      return Image.memory(
-        _bytes!,
-        width: widget.width,
-        height: widget.height,
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-      );
-    }
-
-    return SizedBox(
-      width: widget.width,
-      height: widget.height,
-      child: widget.nullArtworkWidget,
-    );
-  }
-}
 
 Color _boostVibrance(
   Color color, {
@@ -874,7 +757,7 @@ class _MyHomePageState extends State<MyHomePage> {
   final OnAudioQuery _audioQuery = OnAudioQuery();
   final SearchController _searchController = SearchController();
 
-  bool _showSearchInAppBar = false;
+  final ValueNotifier<bool> _showSearchInAppBar = ValueNotifier<bool>(false);
 
   late int _selectedTabIndex;
 
@@ -1223,47 +1106,25 @@ void _recomputeAllData() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ValueListenableBuilder<int?>(
-          valueListenable: _controller.currentPlayIndexNotifier,
-          builder: (context, currentIndex, _) => MiniPlayer(
-            controller: _controller,
-            songs: _songs,
-            currentIndex: currentIndex,
-            playlist: _controller.currentPlaylist,
-            // Queue changes must not mutate the Library list.
-            onQueueChanged: (_) {},
-            onTap: (song) => _openNowPlaying(song),
+          ValueListenableBuilder<int?>(
+            valueListenable: _controller.currentPlayIndexNotifier,
+            builder: (context, currentIndex, _) => MiniPlayer(
+              controller: _controller,
+              songs: _songs,
+              currentIndex: currentIndex,
+              playlist: _controller.currentPlaylist,
+              onQueueChanged: (_) {},
+              onTap: (song) => _openNowPlaying(song),
+            ),
           ),
-        ),
-        TweenAnimationBuilder<double>(
-          tween: Tween<double>(begin: 1, end: _hideBottomBars ? 0 : 1),
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          builder: (context, t, child) {
-            final hidden = t < 0.02;
-            final dy = (1 - t) * 84;
-            return IgnorePointer(
-              ignoring: hidden,
-              child: ClipRect(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  heightFactor: t,
-                  child: Transform.translate(
-                    offset: Offset(0, dy),
-                    child: Opacity(opacity: t, child: child),
-                  ),
-                ),
-              ),
-            );
-          },
-          child: Builder(builder: (ctx) {
+          Builder(builder: (ctx) {
             final cs = Theme.of(ctx).colorScheme;
             final isDark = Theme.of(ctx).brightness == Brightness.dark;
             return ClipRect(
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                 child: Container(
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.transparent,
                   ),
                   child: NavigationBar(
@@ -1304,9 +1165,8 @@ void _recomputeAllData() {
               ),
             );
           }),
-        ),
-      ],
-    );
+        ],
+      );
   }
 
   void _showInlineDetail(Widget detailContent) {
@@ -2042,8 +1902,8 @@ void _recomputeAllData() {
     // Keep the threshold low so it feels responsive.
     final shouldShow =
         _scrollController.hasClients && _scrollController.offset > 80;
-    if (shouldShow != _showSearchInAppBar) {
-      setState(() => _showSearchInAppBar = shouldShow);
+    if (shouldShow != _showSearchInAppBar.value) {
+      _showSearchInAppBar.value = shouldShow;
     }
     // Defensive: if the search overlay is open, scrolling should close it.
     if (_searchController.isOpen) {
@@ -2055,6 +1915,7 @@ void _recomputeAllData() {
   @override
   void dispose() {
     _searchController.dispose();
+    _showSearchInAppBar.dispose();
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
@@ -2180,12 +2041,36 @@ void _recomputeAllData() {
   Future<void> loadMusic() async {
     setState(() => _isLoading = true);
     try {
-      List<SongModel> rawSongs = await _audioQuery.querySongs(
-        uriType: UriType.EXTERNAL,
-        ignoreCase: true,
-      );
+      List<SongModel> rawSongs;
+      List<AlbumModel> albums;
 
-      List<AlbumModel> albums = await _audioQuery.queryAlbums();
+      if (!kIsWeb && defaultTargetPlatform != TargetPlatform.android) {
+        final result = await LocalAudioScanner.instance.scanMusic(
+          includedFolders: _includedFolders,
+          excludedFolders: _excludedFolders,
+        );
+        rawSongs = result.songs;
+        albums = result.albums;
+      } else {
+        rawSongs = await _audioQuery.querySongs(
+          uriType: UriType.EXTERNAL,
+          ignoreCase: true,
+        );
+        albums = await _audioQuery.queryAlbums();
+      }
+
+      for (final song in rawSongs) {
+        LocalAudioScanner.instance.registerSongPath(song.id, song.data);
+      }
+      for (final album in albums) {
+        final art = album.getMap['album_art']?.toString();
+        if (art != null && art.isNotEmpty) {
+          LocalAudioScanner.instance.registerAlbumRepresentativePath(
+            album.id,
+            art,
+          );
+        }
+      }
 
       _controller.albumMap = {for (final a in albums) a.id: a};
 
@@ -2211,6 +2096,7 @@ void _recomputeAllData() {
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('Error in loadMusic: $e');
       setState(() => _isLoading = false);
     }
   }
@@ -2603,7 +2489,14 @@ void _recomputeAllData() {
     }
   }
 
-  static const List<String> _commonFolders = [
+  List<String> get _commonFolders {
+    if (!kIsWeb && defaultTargetPlatform != TargetPlatform.android) {
+      return LocalAudioScanner.getDefaultMusicDirectories();
+    }
+    return _androidCommonFolders;
+  }
+
+  static const List<String> _androidCommonFolders = [
     '/storage/emulated/0/Music/',
     '/storage/emulated/0/Download/',
     '/storage/emulated/0/Podcasts/',
@@ -3408,7 +3301,7 @@ void _recomputeAllData() {
             title: _isSelectionMode
                 ? Text('${_selectedSongIds.length} selected')
                 : const Text('Library'),
-            expandedHeight: 112,
+            expandedHeight: 166,
             collapsedHeight: 86,
             toolbarHeight: 86,
             centerTitle: false,
@@ -3451,21 +3344,26 @@ void _recomputeAllData() {
                   viewSurfaceTintColor: Colors.transparent,
                   dividerColor: cs.outlineVariant.withOpacity(0.28),
                   builder: (context, controller) {
-                    return AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 160),
-                      switchInCurve: Curves.easeOut,
-                      switchOutCurve: Curves.easeIn,
-                      child: _showSearchInAppBar
-                          ? IconButton(
-                              key: const ValueKey('search_on'),
-                              icon: const Icon(Icons.search_rounded),
-                              tooltip: 'Search',
-                              onPressed: () {
-                                HapticFeedback.selectionClick();
-                                controller.openView();
-                              },
-                            )
-                          : const SizedBox.shrink(key: ValueKey('search_off')),
+                    return ValueListenableBuilder<bool>(
+                      valueListenable: _showSearchInAppBar,
+                      builder: (context, showSearch, _) {
+                        return AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 160),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          child: showSearch
+                              ? IconButton(
+                                  key: const ValueKey('search_on'),
+                                  icon: const Icon(Icons.search_rounded),
+                                  tooltip: 'Search',
+                                  onPressed: () {
+                                    HapticFeedback.selectionClick();
+                                    controller.openView();
+                                  },
+                                )
+                              : const SizedBox.shrink(key: ValueKey('search_off')),
+                        );
+                      },
                     );
                   },
                   suggestionsBuilder: (context, controller) {
@@ -3994,15 +3892,8 @@ void _recomputeAllData() {
                 ),
               ),
             ),
-            SliverPrototypeExtentList(
-            prototypeItem: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12.0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10.0),
-                child: const SizedBox(height: 68, width: double.infinity),
-              ),
-            ),
-            delegate: SliverChildBuilderDelegate((context, index) {
+            SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
               final song = _songs[index];
               final isSelected = _selectedSongIds.contains(song.id);
               final cs = Theme.of(context).colorScheme;
@@ -4463,7 +4354,7 @@ void _recomputeAllData() {
         slivers: [
           SliverAppBar.large(
             title: const Text('Album Artists'),
-            expandedHeight: 112,
+            expandedHeight: 166,
             collapsedHeight: 86,
             toolbarHeight: 86,
             scrolledUnderElevation: 0,
@@ -4669,7 +4560,7 @@ void _recomputeAllData() {
           slivers: [
             SliverAppBar.large(
               title: const Text('Albums'),
-              expandedHeight: 112,
+              expandedHeight: 166,
               collapsedHeight: 86,
               toolbarHeight: 86,
               scrolledUnderElevation: 0,
@@ -5032,7 +4923,7 @@ void _recomputeAllData() {
         slivers: [
           SliverAppBar.large(
             title: const Text('Playlists'),
-            expandedHeight: 112,
+            expandedHeight: 166,
             collapsedHeight: 86,
             toolbarHeight: 86,
             scrolledUnderElevation: 0,
@@ -5542,7 +5433,7 @@ class ArtistPage extends StatefulWidget {
         slivers: [
           SliverAppBar.large(
             title: const SizedBox.shrink(),
-            expandedHeight: 96,
+            expandedHeight: 150,
             collapsedHeight: 80,
             toolbarHeight: 80,
             scrolledUnderElevation: 0,
@@ -5804,9 +5695,9 @@ class AlbumPage extends StatefulWidget {
         return cached;
       }
 
-      final bytes = await OnAudioQuery().queryArtwork(
+      final bytes = await queryArtworkBytesCached(
         albumId,
-        ArtworkType.ALBUM,
+        type: ArtworkType.ALBUM,
         size: 320,
       );
       if (bytes == null) return null;
@@ -5910,7 +5801,7 @@ class AlbumPage extends StatefulWidget {
                 slivers: [
                   SliverAppBar.large(
                     title: const SizedBox.shrink(),
-                    expandedHeight: 96,
+                    expandedHeight: 150,
                     collapsedHeight: 80,
                     toolbarHeight: 80,
                     scrolledUnderElevation: 0,
@@ -6153,7 +6044,7 @@ class _SmartPlaylistPage extends StatelessWidget {
         slivers: [
           SliverAppBar.large(
             title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            expandedHeight: 112,
+            expandedHeight: 166,
             collapsedHeight: 86,
             toolbarHeight: 86,
             scrolledUnderElevation: 0,
@@ -7151,7 +7042,7 @@ class _UserPlaylistPageState extends State<_UserPlaylistPage> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-            expandedHeight: 112,
+            expandedHeight: 166,
             collapsedHeight: 86,
             toolbarHeight: 86,
             scrolledUnderElevation: 0,
@@ -8609,6 +8500,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   late final AnimationController _bgGradientController;
   late final AnimationController _artworkPulseController;
+  late final PageController _pageController;
   StreamSubscription<PlayerState>? _nowPlayingPlayerStateSub;
   StreamSubscription<Duration>? _positionSub;
 
@@ -8620,6 +8512,9 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   void initState() {
     super.initState();
     _displayedSong = widget.song;
+    _pageController = PageController(
+      initialPage: widget.player.currentIndex ?? 0,
+    );
     if (hasCachedArtworkBytes(_displayedSong.id, size: 900)) {
       _displayedArtworkBytes = peekCachedArtworkBytes(
         _displayedSong.id,
@@ -8705,6 +8600,14 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       }
 
       if (newSong == null || newSong.id == _displayedSong.id) return;
+
+      if (_pageController.hasClients && _pageController.page?.round() != index) {
+        _pageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
 
       final hasHighRes = hasCachedArtworkBytes(newSong.id, size: 900);
       final hasLowRes = hasCachedArtworkBytes(newSong.id, size: 200);
@@ -8803,6 +8706,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     }
 
     _activeLyricIndex.dispose();
+    _pageController.dispose();
 
     appIsForeground.removeListener(_handleForegroundChanged);
     _bgGradientController.dispose();
@@ -9298,13 +9202,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                     ),
                                   ],
                                 ),
-                                child: Hero(
-                                  tag: 'mini_artwork_${_displayedSong.id}',
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(28),
-                                    child: _buildNowPlayingArtwork(side: side),
-                                  ),
-                                ),
+                                child: _buildArtworkPageView(side: side),
                               ),
                             ),
                           );
@@ -9570,9 +9468,10 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     Color adjustColorForTheme(Color color) {
       final hsl = HSLColor.fromColor(color);
       if (isDark) {
-        // Darker colors for dark mode
+        // Deep, rich colors for dark mode.
         return hsl
-            .withLightness((hsl.lightness * 0.7).clamp(0.1, 0.4))
+            .withSaturation((hsl.saturation * 0.95).clamp(0.0, 1.0))
+            .withLightness((hsl.lightness * 0.5).clamp(0.25, 0.45))
             .toColor();
       } else {
         // Lighter colors for light mode
@@ -9638,46 +9537,65 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                     return AnimatedBuilder(
                       animation: _bgGradientController,
                       builder: (context, _) {
-                        // Same animation style as AboutPage, but vertical motion.
+                        final size = MediaQuery.of(context).size;
+                        final maxDim = math.max(size.width, size.height);
+                        final blobSize = maxDim * 1.2;
+
                         final t = _bgGradientController.value;
-                        final begin =
-                            Alignment.lerp(
-                              Alignment.topLeft,
-                              Alignment.bottomLeft,
-                              (math.sin(t * math.pi * 2) + 1) / 2,
-                            ) ??
-                            Alignment.topLeft;
-                        final end =
-                            Alignment.lerp(
-                              Alignment.bottomRight,
-                              Alignment.topRight,
-                              (math.cos(t * math.pi * 2) + 1) / 2,
-                            ) ??
-                            Alignment.bottomRight;
+                        
+                        // Lissajous curve paths mapped to [0, 1] for Positioned
+                        final x1 = (math.sin(t * math.pi * 2) + 1) / 2;
+                        final y1 = (math.cos(t * math.pi * 4) + 1) / 2;
+                        
+                        final x2 = (math.cos(t * math.pi * 2 + math.pi) + 1) / 2;
+                        final y2 = (math.sin(t * math.pi * 6) + 1) / 2;
+                        
+                        final x3 = (math.sin(t * math.pi * 4 + math.pi / 4) + 1) / 2;
+                        final y3 = (math.cos(t * math.pi * 2 + math.pi / 4) + 1) / 2;
 
-                        final bgGradient = LinearGradient(
-                          begin: begin,
-                          end: end,
-                          colors: [c1, c2, c3, bottomColor],
-                          stops: const [0.0, 0.34, 0.68, 1.0],
-                        );
+                        final x4 = (math.cos(t * math.pi * 2 + math.pi / 2) + 1) / 2;
+                        final y4 = (math.sin(t * math.pi * 4 + math.pi / 2) + 1) / 2;
 
-                        final enableBlur = appIsForeground.value && !_disableMotion;
-                        // Reduce blur while the gradient animation is running to avoid heavy ImageFilter costs.
-                        final double blurSigma = enableBlur
-                            ? (_bgGradientController.isAnimating ? 2.0 : 8.0)
-                            : 0.0;
-
-                        final gradientLayer = blurSigma > 0.5
-                            ? ImageFiltered(
-                                imageFilter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(gradient: bgGradient),
+                        Widget buildBlob(double xOffset, double yOffset, Color color, double scale) {
+                          return Positioned(
+                            left: xOffset * size.width - (blobSize * scale) / 2,
+                            top: yOffset * size.height - (blobSize * scale) / 2,
+                            child: Container(
+                              width: blobSize * scale,
+                              height: blobSize * scale,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: RadialGradient(
+                                  colors: [
+                                    color.withOpacity(1.0),
+                                    color.withOpacity(0.75),
+                                    color.withOpacity(0.0),
+                                  ],
+                                  stops: const [0.0, 0.45, 1.0],
                                 ),
-                              )
-                            : DecoratedBox(
-                                decoration: BoxDecoration(gradient: bgGradient),
-                              );
+                              ),
+                            ),
+                          );
+                        }
+
+                        final gradientLayer = DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [c1.withOpacity(0.8), c3.withOpacity(0.8)],
+                            ),
+                          ),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              buildBlob(x1, y1 * 0.5, c1, 1.4),
+                              buildBlob(x2, (y2 * 0.5) + 0.5, c2, 1.5),
+                              buildBlob(x3, y3, c3, 1.3),
+                              buildBlob(x4, (y4 * 0.3) + 0.7, c2, 1.6), // Bottom coverage
+                            ],
+                          ),
+                        );
 
                         final vignette = DecoratedBox(
                           decoration: BoxDecoration(
@@ -10285,6 +10203,76 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     );
   }
 
+  Widget _buildArtworkPageView({required double side}) {
+    final sequence = widget.player.sequence;
+    if (sequence == null || sequence.isEmpty) {
+      return _buildNowPlayingArtwork(side: side);
+    }
+
+    return PageView.builder(
+      controller: _pageController,
+      itemCount: sequence.length,
+      onPageChanged: (index) {
+        if (index != widget.player.currentIndex) {
+          widget.player.seek(Duration.zero, index: index);
+        }
+      },
+      itemBuilder: (context, index) {
+        final currentSource = sequence[index];
+        final tag = currentSource.tag;
+        
+        int? songId;
+        if (tag is MediaItem) {
+          songId = int.tryParse(tag.id);
+        } else if (tag is SongModel) {
+          songId = tag.id;
+        }
+
+        if (songId == null) {
+          return _buildNowPlayingArtwork(side: side);
+        }
+
+        final artworkWidget = FastArtworkWidget(
+          id: songId,
+          type: ArtworkType.AUDIO,
+          size: 900,
+          quality: 100,
+          width: side,
+          height: side,
+          keepOldArtwork: true,
+          nullArtworkWidget: Container(
+            width: side,
+            height: side,
+            decoration: BoxDecoration(
+              color: Colors.white10,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: const Icon(
+              Icons.music_note,
+              size: 100,
+              color: Colors.white38,
+            ),
+          ),
+        );
+
+        if (songId == _displayedSong.id) {
+          return Hero(
+            tag: 'mini_artwork_$songId',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: artworkWidget,
+            ),
+          );
+        }
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: artworkWidget,
+        );
+      },
+    );
+  }
+
   Widget _buildArtworkView({Alignment alignment = Alignment.center}) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -10322,13 +10310,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                     ),
                   ],
                 ),
-                child: Hero(
-                  tag: 'mini_artwork_${_displayedSong.id}',
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
-                    child: _buildNowPlayingArtwork(side: side),
-                  ),
-                ),
+                child: _buildArtworkPageView(side: side),
               ),
             ),
           ),
