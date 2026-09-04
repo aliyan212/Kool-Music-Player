@@ -1,8 +1,10 @@
 
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:audiotags/audiotags.dart';
-
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 class LyricLine {
   final Duration time;
@@ -12,12 +14,82 @@ class LyricLine {
 }
 
 class LyricsHelper {
+  /// Computes companion .lrc path matching the audio file name.
+  static String getCompanionLrcPath(String audioPath) {
+    final dir = p.dirname(audioPath);
+    final baseName = p.basenameWithoutExtension(audioPath);
+    return p.join(dir, '$baseName.lrc');
+  }
+
+  /// Fast retrieval: checks companion .lrc file first (<1ms), then falls back to embedded tag.
+  static Future<String?> getLyrics(String path) async {
+    // 1. Check companion .lrc file first.
+    try {
+      final lrcPath = getCompanionLrcPath(path);
+      final lrcFile = File(lrcPath);
+      if (await lrcFile.exists()) {
+        final content = await lrcFile.readAsString();
+        if (content.trim().isNotEmpty) {
+          return content.trim();
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fall back to reading embedded tag.
+    return getEmbeddedLyrics(path);
+  }
+
   static Future<String?> getEmbeddedLyrics(String path) async {
     try {
       final tag = await AudioTags.read(path);
       return tag?.lyrics;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Saves lyrics to both the companion .lrc file (for all external players)
+  /// and embedded in the audio file's tags.
+  static Future<void> saveLyrics(String audioPath, String? lyrics) async {
+    final trimmed = lyrics?.trim() ?? '';
+
+    // 1. Write/update companion .lrc file.
+    try {
+      final lrcPath = getCompanionLrcPath(audioPath);
+      final lrcFile = File(lrcPath);
+      if (trimmed.isEmpty) {
+        if (await lrcFile.exists()) {
+          await lrcFile.delete();
+        }
+      } else {
+        await lrcFile.writeAsString(trimmed);
+      }
+    } catch (e) {
+      debugPrint('Companion .lrc write warning: $e');
+    }
+
+    // 2. Write embedded audio tags.
+    try {
+      final existingTag = await AudioTags.read(audioPath);
+      final newTag = Tag(
+        title: existingTag?.title,
+        trackArtist: existingTag?.trackArtist,
+        album: existingTag?.album,
+        albumArtist: existingTag?.albumArtist,
+        year: existingTag?.year,
+        genre: existingTag?.genre,
+        trackNumber: existingTag?.trackNumber,
+        trackTotal: existingTag?.trackTotal,
+        discNumber: existingTag?.discNumber,
+        discTotal: existingTag?.discTotal,
+        lyrics: trimmed.isEmpty ? null : trimmed,
+        duration: existingTag?.duration,
+        pictures: existingTag?.pictures ?? const <Picture>[],
+        bpm: existingTag?.bpm,
+      );
+      await AudioTags.write(audioPath, newTag);
+    } catch (e) {
+      debugPrint('Embedded lyrics write warning: $e');
     }
   }
 

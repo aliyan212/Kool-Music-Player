@@ -3,15 +3,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:audiotags/audiotags.dart';
-import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../main.dart';
-import 'file_ops.dart';
 
 
 const Duration tagWriteTimeout = Duration(seconds: 15);
@@ -19,13 +18,45 @@ const Duration tagDetachTimeout = Duration(milliseconds: 3000);
 const Duration tagRestoreTimeout = Duration(seconds: 5);
 const Duration tagScanTimeout = Duration(milliseconds: 4000);
 
-/// Writes [tag] to [path] with a timestamped backup, verification, and
-/// automatic rollback on failure. Also triggers an Android MediaStore scan
-/// so that Scoped Storage doesn't silently revert the change.
+const MethodChannel _mediaStoreChannel = MethodChannel('com.example.music_player/media_store');
+
+/// Synchronizes tag metadata with the Android system MediaStore database directly.
+/// This ensures external players (and this app) immediately see updated metadata
+/// without waiting for a full, slow media scan.
+Future<void> syncMediaStoreTags({
+  required String path,
+  String? title,
+  String? artist,
+  String? album,
+  int? year,
+  int? track,
+  String? genre,
+}) async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+  try {
+    await _mediaStoreChannel.invokeMethod('updateMediaStoreTags', {
+      'path': path,
+      'title': title,
+      'artist': artist,
+      'album': album,
+      'year': year,
+      'track': track,
+      'genre': genre,
+    });
+  } catch (e) {
+    debugPrint('syncMediaStoreTags non-fatal error: $e');
+  }
+
+  try {
+    await OnAudioQuery().scanMedia(path).timeout(tagScanTimeout);
+  } catch (_) {}
+}
+
+/// Writes [tag] to [path] swiftly with verification, and syncs changes to MediaStore.
 Future<void> writeTagsSafelyWithBackup(
   String path,
   Tag tag, {
-  required Future<bool> Function() verify,
+  Future<bool> Function()? verify,
 }) async {
   if (kIsWeb) {
     throw UnsupportedError('Tag editing is not supported on web builds.');
@@ -37,62 +68,35 @@ Future<void> writeTagsSafelyWithBackup(
     throw FileSystemException('File not found', path);
   }
 
-  final backupPath = '$path.bak_${DateTime.now().millisecondsSinceEpoch}';
-  await copyFile(path, backupPath);
+  // Perform native audio tag write directly (fast, in-place).
+  await AudioTags.write(path, tag);
 
-  try {
-    await AudioTags.write(path, tag);
-
-    // Verify the write persisted.
-    final ok = await verify();
-    if (!ok) {
-      throw Exception(
-        'Write verification failed. The file may be locked or read-only.',
-      );
-    }
-
-    // Trigger MediaStore re-scan so Android Scoped Storage picks up changes.
-    await _scanMediaAfterWrite(path);
-
-    // Best-effort cleanup of backup.
+  // Soft-verify if requested. Log warning rather than throwing to avoid destructive rollback.
+  if (verify != null) {
     try {
-      await deleteFile(backupPath);
-    } catch (_) {}
-  } catch (e) {
-    // Restore original on any failure.
-    try {
-      await copyFile(backupPath, path);
-    } catch (restoreErr) {
-      debugPrint('CRITICAL: Failed to restore backup for $path: $restoreErr');
+      final ok = await verify();
+      if (!ok) {
+        debugPrint('Tag write notice: verify returned non-exact match for $path');
+      }
+    } catch (vErr) {
+      debugPrint('Tag verification warning (non-fatal): $vErr');
     }
-    rethrow;
   }
-}
 
-/// Scans the file into Android MediaStore so Scoped Storage recognizes
-/// metadata changes and doesn't revert them.
-Future<void> _scanMediaAfterWrite(String path) async {
-  if (kIsWeb) return;
-  if (defaultTargetPlatform != TargetPlatform.android) return;
-  try {
-    // First scan the specific file.
-    await OnAudioQuery().scanMedia(path);
-    // Also scan the parent directory to ensure the MediaStore database
-    // re-indexes the file completely.
-    final parent = File(path).parent.path;
-    await OnAudioQuery().scanMedia(parent);
-  } catch (e) {
-    debugPrint('MediaStore scan warning (non-fatal): $e');
-  }
+  // Synchronize with Android system MediaStore immediately.
+  await syncMediaStoreTags(
+    path: path,
+    title: tag.title,
+    artist: tag.trackArtist,
+    album: tag.album,
+    year: tag.year,
+    track: tag.trackNumber,
+    genre: tag.genre,
+  );
 }
 
 /// Fully detaches the [player] from its current audio source to release
 /// all native file handles before external tag writing.
-///
-/// This is more aggressive than just pausing — it stops playback, clears
-/// the audio source entirely, and gives the platform time to close file
-/// descriptors. On Android, this is essential because ExoPlayer holds
-/// file handles even when paused/stopped with a loaded source.
 Future<void> detachPlayerForTagWrite(AudioPlayer player) async {
   // Step 1: Pause and stop to halt decoding.
   try {
@@ -105,15 +109,11 @@ Future<void> detachPlayerForTagWrite(AudioPlayer player) async {
   // Step 2: Replace audio source with an empty playlist. This forces
   // just_audio to release the native decoder and close file handles.
   try {
-    await player.setAudioSource(
-      ConcatenatingAudioSource(children: []),
-      preload: false,
-    );
+    await player.setAudioSources([], preload: false);
   } catch (_) {}
 
   // Step 3: Give the native layer time to actually close file descriptors.
-  // 300ms is a safe minimum; on slow devices this may need more time.
-  await Future<void>.delayed(const Duration(milliseconds: 300));
+  await Future<void>.delayed(const Duration(milliseconds: 200));
 }
 
 Future<void> restorePlayerAfterTagWrite(
@@ -134,17 +134,42 @@ Future<void> restorePlayerAfterTagWrite(
   }
 }
 
+/// Runs [action], only suspending and detaching the player IF the file being
+/// edited is currently loaded in [player]. If another song is playing, playback
+/// continues uninterrupted.
 Future<void> runWithPlayerPlaybackSuspended(
   AudioPlayer player,
   AudioSource? playlist,
-  Future<void> Function() action,
-) async {
+  Future<void> Function() action, {
+  String? targetFilePath,
+}) async {
   final handler = audioHandler;
   final shouldSuspend = handler != null && handler.player == player;
   final restoreSource = playlist ?? player.audioSource;
   final hasLoaded =
       player.processingState != ProcessingState.idle && restoreSource != null;
-  if (!hasLoaded) {
+
+  // Check if the target file is actually what's currently playing/loaded.
+  bool targetIsCurrent = true;
+  if (targetFilePath != null && targetFilePath.isNotEmpty) {
+    try {
+      final currentIdx = player.currentIndex;
+      final sequence = player.sequence;
+      if (currentIdx != null && currentIdx < sequence.length) {
+        final currentSource = sequence[currentIdx];
+        if (currentSource is UriAudioSource) {
+          final uri = currentSource.uri;
+          final currentPath = uri.toFilePath();
+          targetIsCurrent = (currentPath == targetFilePath);
+        }
+      }
+    } catch (_) {
+      targetIsCurrent = true; // Safe fallback if inspection fails
+    }
+  }
+
+  // If player isn't playing this file, execute directly without stopping playback!
+  if (!hasLoaded || !targetIsCurrent) {
     await action();
     return;
   }

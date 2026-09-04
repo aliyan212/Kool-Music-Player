@@ -71,6 +71,27 @@ class LocalAudioScanner {
     }
   }
 
+  /// Updates or invalidates the cached metadata for a specific song path.
+  Future<void> updateCachedSong({
+    required String path,
+    required SongModel song,
+  }) async {
+    await _ensureBox();
+    try {
+      final f = File(path);
+      if (f.existsSync()) {
+        final stat = f.statSync();
+        await _metaBox?.put(path, {
+          'modified': stat.modified.millisecondsSinceEpoch,
+          'size': stat.size,
+          'meta': song.getMap,
+        });
+      } else {
+        await _metaBox?.delete(path);
+      }
+    } catch (_) {}
+  }
+
   /// Returns default music directories on Linux / Desktop.
   static List<String> getDefaultMusicDirectories() {
     final List<String> dirs = [];

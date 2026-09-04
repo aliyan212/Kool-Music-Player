@@ -35,6 +35,57 @@ void storeCachedArtworkBytesByKey(String key, int size, Uint8List? bytes) {
   }
 }
 
+final ValueNotifier<int> artworkRevisionNotifier = ValueNotifier<int>(0);
+
+void notifyArtworkChanged() {
+  artworkRevisionNotifier.value++;
+}
+
+bool _cacheKeyMatchesId(String key, int id) {
+  final parts = key.split('_');
+  return parts.length >= 2 && parts[1] == id.toString();
+}
+
+void evictArtworkCache(int id) {
+  CachingService().thumbnailCache.removeWhere((k, _) => _cacheKeyMatchesId(k, id));
+  CachingService().highResCache.removeWhere((k, _) => _cacheKeyMatchesId(k, id));
+  _inFlightArtwork.removeWhere((k, _) => _cacheKeyMatchesId(k, id));
+  notifyArtworkChanged();
+}
+
+void clearArtworkCache() {
+  CachingService().thumbnailCache.clear();
+  CachingService().highResCache.clear();
+  _inFlightArtwork.clear();
+  notifyArtworkChanged();
+}
+
+void updateArtworkCache(int id, Uint8List? bytes, {int? albumId}) {
+  CachingService().thumbnailCache.removeWhere((k, _) => _cacheKeyMatchesId(k, id));
+  CachingService().highResCache.removeWhere((k, _) => _cacheKeyMatchesId(k, id));
+  _inFlightArtwork.removeWhere((k, _) => _cacheKeyMatchesId(k, id));
+
+  if (albumId != null && albumId > 0) {
+    CachingService().thumbnailCache.removeWhere((k, _) => _cacheKeyMatchesId(k, albumId));
+    CachingService().highResCache.removeWhere((k, _) => _cacheKeyMatchesId(k, albumId));
+    _inFlightArtwork.removeWhere((k, _) => _cacheKeyMatchesId(k, albumId));
+  }
+
+  if (bytes != null && bytes.isNotEmpty) {
+    storeCachedArtworkBytesByKey(getArtworkKey(id, ArtworkType.AUDIO, 200), 200, bytes);
+    storeCachedArtworkBytesByKey(getArtworkKey(id, ArtworkType.AUDIO, 900), 900, bytes);
+    CachingService().thumbnailCache['${ArtworkType.AUDIO.name}_$id'] = bytes;
+    CachingService().highResCache['${ArtworkType.AUDIO.name}_$id'] = bytes;
+    if (albumId != null && albumId > 0) {
+      storeCachedArtworkBytesByKey(getArtworkKey(albumId, ArtworkType.ALBUM, 200), 200, bytes);
+      storeCachedArtworkBytesByKey(getArtworkKey(albumId, ArtworkType.ALBUM, 900), 900, bytes);
+      CachingService().thumbnailCache['${ArtworkType.ALBUM.name}_$albumId'] = bytes;
+      CachingService().highResCache['${ArtworkType.ALBUM.name}_$albumId'] = bytes;
+    }
+  }
+  notifyArtworkChanged();
+}
+
 bool hasCachedArtworkBytes(
   int id, {
   ArtworkType type = ArtworkType.AUDIO,
@@ -83,8 +134,8 @@ Future<Uint8List?> queryArtworkBytesCached(
         );
       } catch (_) {}
 
-      // If Android MediaStore had no artwork, attempt local file tag fallback
-      if (bytes == null) {
+      // If Android MediaStore had no artwork or returned empty bytes, attempt local file tag fallback
+      if (bytes == null || bytes.isEmpty) {
         bytes = await LocalAudioScanner.instance.getArtworkBytes(id, type: type);
       }
     }
@@ -132,13 +183,25 @@ class _FastArtworkWidgetState extends State<FastArtworkWidget> {
   @override
   void initState() {
     super.initState();
+    artworkRevisionNotifier.addListener(_onArtworkRevisionChanged);
+    _fetchArtwork();
+  }
+
+  @override
+  void dispose() {
+    artworkRevisionNotifier.removeListener(_onArtworkRevisionChanged);
+    super.dispose();
+  }
+
+  void _onArtworkRevisionChanged() {
+    if (!mounted) return;
     _fetchArtwork();
   }
 
   @override
   void didUpdateWidget(covariant FastArtworkWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.id != widget.id || oldWidget.type != widget.type) {
+    if (oldWidget.id != widget.id || oldWidget.type != widget.type || oldWidget.key != widget.key) {
       if (!widget.keepOldArtwork) {
         setState(() => _bytes = null);
       }
@@ -149,8 +212,15 @@ class _FastArtworkWidgetState extends State<FastArtworkWidget> {
   void _fetchArtwork() {
     final key = getArtworkKey(widget.id, widget.type, widget.size);
     if (hasCachedArtworkBytes(widget.id, type: widget.type, size: widget.size)) {
-      _bytes = peekCachedArtworkBytes(widget.id, type: widget.type, size: widget.size);
-      return;
+      final cached = peekCachedArtworkBytes(widget.id, type: widget.type, size: widget.size);
+      if (cached != null && cached.isNotEmpty) {
+        if (_bytes != cached) {
+          setState(() {
+            _bytes = cached;
+          });
+        }
+        return;
+      }
     }
 
     queryArtworkBytesCached(
@@ -161,9 +231,11 @@ class _FastArtworkWidgetState extends State<FastArtworkWidget> {
     ).then((bytes) {
       if (!mounted) return;
       if (getArtworkKey(widget.id, widget.type, widget.size) != key) return;
-      setState(() {
-        _bytes = bytes;
-      });
+      if (_bytes != bytes) {
+        setState(() {
+          _bytes = bytes;
+        });
+      }
     });
   }
 
@@ -180,7 +252,7 @@ class _FastArtworkWidgetState extends State<FastArtworkWidget> {
         fit: widget.artworkFit,
         gaplessPlayback: true,
         filterQuality: FilterQuality.medium,
-        errorBuilder: (_, __, ___) => widget.nullArtworkWidget,
+        errorBuilder: (_, _, _) => widget.nullArtworkWidget,
       );
     }
     return widget.nullArtworkWidget;

@@ -14,6 +14,7 @@ class LyricsEditorDialog extends StatefulWidget {
   final SongModel song;
   final String? currentLyrics;
   final VoidCallback onSaved;
+  final void Function(String lyrics)? onLyricsSaved;
   final Future<void> Function(Future<void> Function())?
   runWithPlaybackSuspended;
 
@@ -22,6 +23,7 @@ class LyricsEditorDialog extends StatefulWidget {
     required this.song,
     this.currentLyrics,
     required this.onSaved,
+    this.onLyricsSaved,
     this.runWithPlaybackSuspended,
   });
 
@@ -44,6 +46,20 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
     _isSynced =
         widget.currentLyrics != null &&
         LyricsHelper.isLRC(widget.currentLyrics!);
+
+    if (widget.currentLyrics == null || widget.currentLyrics!.isEmpty) {
+      _loadExistingLyrics();
+    }
+  }
+
+  Future<void> _loadExistingLyrics() async {
+    final l = await LyricsHelper.getLyrics(widget.song.data);
+    if (l != null && l.isNotEmpty && mounted) {
+      setState(() {
+        _lyricsController.text = l;
+        _isSynced = LyricsHelper.isLRC(l);
+      });
+    }
   }
 
   @override
@@ -59,39 +75,10 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
     setState(() => _isSaving = true);
     try {
       final run = widget.runWithPlaybackSuspended;
+      final expectedLyrics = _lyricsController.text.trim();
 
       Future<void> doSave() async {
-        final tag = await AudioTags.read(widget.song.data);
-        final expectedLyrics = _lyricsController.text.trim();
-
-        final newTag = Tag(
-          title: tag?.title,
-          trackArtist: tag?.trackArtist,
-          album: tag?.album,
-          albumArtist: tag?.albumArtist,
-          year: tag?.year,
-          genre: tag?.genre,
-          trackNumber: tag?.trackNumber,
-          trackTotal: tag?.trackTotal,
-          discNumber: tag?.discNumber,
-          discTotal: tag?.discTotal,
-          lyrics: expectedLyrics.isEmpty ? null : expectedLyrics,
-          duration: tag?.duration,
-          pictures: tag?.pictures ?? const <Picture>[],
-          bpm: tag?.bpm,
-        );
-
-        await writeTagsSafelyWithBackup(
-          widget.song.data,
-          newTag,
-          verify: () async {
-            final verify = await AudioTags.read(widget.song.data);
-            final actualLyrics = (verify?.lyrics ?? '').trim();
-            return expectedLyrics.isEmpty
-                ? actualLyrics.isEmpty
-                : actualLyrics == expectedLyrics;
-          },
-        );
+        await LyricsHelper.saveLyrics(widget.song.data, expectedLyrics);
       }
 
       if (run != null) {
@@ -100,21 +87,8 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
         await doSave();
       }
 
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-        try {
-          await OnAudioQuery()
-              .scanMedia(widget.song.data)
-              .timeout(
-                tagScanTimeout,
-                onTimeout: () {
-                  debugPrint('Timed out scanning media after lyrics write.');
-                  return false;
-                },
-              );
-        } catch (_) {}
-      }
-
       if (!mounted) return;
+      widget.onLyricsSaved?.call(expectedLyrics);
       widget.onSaved();
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(

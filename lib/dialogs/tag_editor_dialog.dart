@@ -1,4 +1,5 @@
 
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audiotags/audiotags.dart';
@@ -9,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../services/local_audio_scanner.dart';
 import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/tag_write_access.dart';
 
@@ -16,6 +18,7 @@ import '../utils/tag_write_access.dart';
 class TagEditorDialog extends StatefulWidget {
   final SongModel song;
   final VoidCallback onSaved;
+  final ValueChanged<SongModel>? onSongUpdated;
   final Future<void> Function(Future<void> Function())?
   runWithPlaybackSuspended;
 
@@ -23,6 +26,7 @@ class TagEditorDialog extends StatefulWidget {
     super.key,
     required this.song,
     required this.onSaved,
+    this.onSongUpdated,
     this.runWithPlaybackSuspended,
   });
 
@@ -114,14 +118,39 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
     super.dispose();
   }
 
-  MimeType? _mimeFromFileName(String? name) {
+  MimeType _detectMimeType(Uint8List bytes, String? name) {
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
+      return MimeType.jpeg;
+    }
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47 &&
+        bytes[4] == 0x0D &&
+        bytes[5] == 0x0A &&
+        bytes[6] == 0x1A &&
+        bytes[7] == 0x0A) {
+      return MimeType.png;
+    }
+    if (bytes.length >= 6 &&
+        bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46) {
+      return MimeType.gif;
+    }
+    if (bytes.length >= 2 && bytes[0] == 0x42 && bytes[1] == 0x4D) {
+      return MimeType.bmp;
+    }
     final lower = (name ?? '').toLowerCase();
     if (lower.endsWith('.png')) return MimeType.png;
-    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return MimeType.jpeg;
     if (lower.endsWith('.gif')) return MimeType.gif;
     if (lower.endsWith('.bmp')) return MimeType.bmp;
     if (lower.endsWith('.tif') || lower.endsWith('.tiff')) return MimeType.tiff;
-    return null;
+    return MimeType.jpeg;
   }
 
   Future<void> _pickCoverArt() async {
@@ -155,7 +184,7 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
         return;
       }
 
-      final mime = _mimeFromFileName(file.name);
+      final mime = _detectMimeType(bytes, file.name);
       if (!mounted) return;
       setState(() {
         _newCoverBytes = bytes;
@@ -232,14 +261,26 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
         }
 
         if (!removeCover && newCover != null && newCover.isNotEmpty) {
+          final mime = _newCoverMime ?? _detectMimeType(newCover, null);
           pictures.insert(
             0,
             Picture(
               pictureType: PictureType.coverFront,
-              mimeType: _newCoverMime,
+              mimeType: mime,
               bytes: newCover,
             ),
           );
+
+          try {
+            final parentDir = File(widget.song.data).parent;
+            if (parentDir.existsSync()) {
+              final companionCover = File('${parentDir.path}/cover.jpg');
+              await companionCover.writeAsBytes(newCover, flush: true);
+              if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+                await _scanMedia(companionCover.path);
+              }
+            }
+          } catch (_) {}
         }
 
         final tag = Tag(
@@ -300,6 +341,10 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
                 coverOk;
           },
         );
+
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+          await _scanMedia(widget.song.data);
+        }
       }
 
       if (run != null) {
@@ -308,15 +353,54 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
         await doSave();
       }
 
-      await _scanMedia(widget.song.data).timeout(
-        tagScanTimeout,
-        onTimeout: () {
-          debugPrint('Timed out scanning media after tag write.');
-        },
-      );
       if (!mounted) return;
 
+      // Construct the updated SongModel for instantaneous in-memory UI updates.
+      final expectedTitle = _titleController.text.trim();
+      final expectedArtist = _artistController.text.trim();
+      final expectedAlbum = _albumController.text.trim();
+      final expectedAlbumArtist = _albumArtistController.text.trim();
+      final expectedGenre = _genreController.text.trim();
+      final expectedYear = _normalizeYear(int.tryParse(_yearController.text.trim()));
+      final expectedTrack = _normalizeTrack(int.tryParse(_trackController.text.trim()));
+
+      final updatedMap = Map<dynamic, dynamic>.from(widget.song.getMap);
+      if (expectedTitle.isNotEmpty) updatedMap['title'] = expectedTitle;
+      if (expectedArtist.isNotEmpty) updatedMap['artist'] = expectedArtist;
+      if (expectedAlbum.isNotEmpty) updatedMap['album'] = expectedAlbum;
+      if (expectedAlbumArtist.isNotEmpty) updatedMap['album_artist'] = expectedAlbumArtist;
+      if (expectedGenre.isNotEmpty) updatedMap['genre'] = expectedGenre;
+      if (expectedYear != null && expectedYear > 0) updatedMap['year'] = expectedYear;
+      if (expectedTrack != null && expectedTrack > 0) updatedMap['track'] = expectedTrack;
+
+      final updatedSong = SongModel(updatedMap);
+
+      // Register path with scanner so artwork fallback can locate it
+      LocalAudioScanner.instance.registerSongPath(widget.song.id, widget.song.data);
+      if (widget.song.albumId != null && widget.song.albumId! > 0) {
+        LocalAudioScanner.instance.registerAlbumRepresentativePath(
+          widget.song.albumId!,
+          widget.song.data,
+        );
+      }
+
+      // Update in-memory artwork cache immediately
+      if (_removeCoverRequested) {
+        evictArtworkCache(widget.song.id);
+        if (widget.song.albumId != null && widget.song.albumId! > 0) {
+          evictArtworkCache(widget.song.albumId!);
+        }
+      } else if (_newCoverBytes != null && _newCoverBytes!.isNotEmpty) {
+        updateArtworkCache(
+          widget.song.id,
+          _newCoverBytes,
+          albumId: widget.song.albumId,
+        );
+      }
+
+      widget.onSongUpdated?.call(updatedSong);
       widget.onSaved();
+
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -399,23 +483,28 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
                             width: 74,
                             height: 74,
                             color: cs.surfaceContainerHighest,
-                            child: _newCoverBytes != null
-                                ? Image.memory(
-                                    _newCoverBytes!,
-                                    fit: BoxFit.cover,
+                            child: _removeCoverRequested
+                                ? Icon(
+                                    Icons.image_rounded,
+                                    color: textColorSecondary,
                                   )
-                                : FastArtworkWidget(
-                                    id: widget.song.id,
-                                    type: ArtworkType.AUDIO,
-                                    width: 74,
-                                    height: 74,
-                                    keepOldArtwork: true,
-                                    artworkFit: BoxFit.cover,
-                                    nullArtworkWidget: Icon(
-                                      Icons.image_rounded,
-                                      color: textColorSecondary,
-                                    ),
-                                  ),
+                                : (_newCoverBytes != null
+                                    ? Image.memory(
+                                        _newCoverBytes!,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : FastArtworkWidget(
+                                        id: widget.song.id,
+                                        type: ArtworkType.AUDIO,
+                                        width: 74,
+                                        height: 74,
+                                        keepOldArtwork: false,
+                                        artworkFit: BoxFit.cover,
+                                        nullArtworkWidget: Icon(
+                                          Icons.image_rounded,
+                                          color: textColorSecondary,
+                                        ),
+                                      )),
                           ),
                         ),
                         const SizedBox(width: 14),

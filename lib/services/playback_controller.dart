@@ -60,6 +60,14 @@ class PlaybackController {
   int? get currentPlayIndex => currentPlayIndexNotifier.value;
   set currentPlayIndex(int? v) => currentPlayIndexNotifier.value = v;
 
+  SongModel? get currentSong {
+    final idx = currentPlayIndex;
+    if (idx != null && idx >= 0 && idx < songs.length) {
+      return songs[idx];
+    }
+    return null;
+  }
+
   // ── Library & playlist state ───────────────────────────────────────
   List<SongModel> songs = [];
   Map<int, AlbumModel> albumMap = {};
