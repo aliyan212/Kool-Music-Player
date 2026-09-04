@@ -535,26 +535,35 @@ Widget buildDetailBottomBars({
   required int selectedTabIndex,
   required ValueChanged<int> onNavigateTab,
 }) {
-  return SafeArea(
-    top: false,
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        MiniPlayer(
-          controller: playbackController,
-          songs: songs,
-          currentIndex: currentIndex,
-          playlist: playlist,
-          onQueueChanged: onQueueChanged,
-          onTap: onOpenNowPlaying,
-        ),
-        ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.transparent,
+  final cs = Theme.of(context).colorScheme;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      MiniPlayer(
+        controller: playbackController,
+        songs: songs,
+        currentIndex: currentIndex,
+        playlist: playlist,
+        onQueueChanged: onQueueChanged,
+        onTap: onOpenNowPlaying,
+      ),
+      ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            decoration: BoxDecoration(
+              color: cs.surface.withOpacity(isDark ? 0.82 : 0.90),
+              border: Border(
+                top: BorderSide(
+                  color: cs.outlineVariant.withOpacity(0.18),
+                  width: 0.5,
+                ),
               ),
+            ),
+            child: SafeArea(
+              top: false,
+              minimum: const EdgeInsets.only(bottom: 6),
               child: NavigationBar(
                 selectedIndex: selectedTabIndex,
                 onDestinationSelected: (index) {
@@ -589,8 +598,8 @@ Widget buildDetailBottomBars({
             ),
           ),
         ),
-      ],
-    ),
+      ),
+    ],
   );
 }
 
@@ -604,8 +613,8 @@ Widget buildBottomBarsGutter(
   BuildContext context, {
   bool includeMiniPlayer = true,
 }) {
-  // 66px themed NavigationBar + breathing room.
-  const double navBarReserve = 74;
+  // 72px themed NavigationBar + breathing room and bottom insets.
+  const double navBarReserve = 80;
   // 80px mini-player + 6px bottom margin.
   const double miniPlayerReserve = 86;
   final double bottomInset = MediaQuery.of(context).padding.bottom;
@@ -1124,42 +1133,52 @@ void _recomputeAllData() {
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                 child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.transparent,
+                  decoration: BoxDecoration(
+                    color: cs.surface.withOpacity(isDark ? 0.82 : 0.90),
+                    border: Border(
+                      top: BorderSide(
+                        color: cs.outlineVariant.withOpacity(0.18),
+                        width: 0.5,
+                      ),
+                    ),
                   ),
-                  child: NavigationBar(
-                    selectedIndex: _selectedTabIndex,
-                    onDestinationSelected: (index) {
-                      if (index == _selectedTabIndex) return;
-                      HapticFeedback.selectionClick();
-                      if (_isSelectionMode) _exitSelectionMode();
-                      setState(() {
-                        _selectedTabIndex = index;
-                        _inlineDetailContent = null;
-                      });
-                    },
-                    destinations: const [
-                      NavigationDestination(
-                        icon: Icon(Icons.home_outlined),
-                        selectedIcon: Icon(Icons.home_rounded),
-                        label: 'Home',
-                      ),
-                      NavigationDestination(
-                        icon: Icon(Icons.people_outline_rounded),
-                        selectedIcon: Icon(Icons.people_rounded),
-                        label: 'Album Artists',
-                      ),
-                      NavigationDestination(
-                        icon: Icon(Icons.album_outlined),
-                        selectedIcon: Icon(Icons.album_rounded),
-                        label: 'Albums',
-                      ),
-                      NavigationDestination(
-                        icon: Icon(Icons.queue_music_outlined),
-                        selectedIcon: Icon(Icons.queue_music_rounded),
-                        label: 'Playlists',
-                      ),
-                    ],
+                  child: SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.only(bottom: 6),
+                    child: NavigationBar(
+                      selectedIndex: _selectedTabIndex,
+                      onDestinationSelected: (index) {
+                        if (index == _selectedTabIndex) return;
+                        HapticFeedback.selectionClick();
+                        if (_isSelectionMode) _exitSelectionMode();
+                        setState(() {
+                          _selectedTabIndex = index;
+                          _inlineDetailContent = null;
+                        });
+                      },
+                      destinations: const [
+                        NavigationDestination(
+                          icon: Icon(Icons.home_outlined),
+                          selectedIcon: Icon(Icons.home_rounded),
+                          label: 'Home',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.people_outline_rounded),
+                          selectedIcon: Icon(Icons.people_rounded),
+                          label: 'Album Artists',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.album_outlined),
+                          selectedIcon: Icon(Icons.album_rounded),
+                          label: 'Albums',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.queue_music_outlined),
+                          selectedIcon: Icon(Icons.queue_music_rounded),
+                          label: 'Playlists',
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -4746,7 +4765,8 @@ void _recomputeAllData() {
                           ),
                           child: Row(
                             children: [
-                              ClipOval(
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
                                 child: FastArtworkWidget(
                                   id: albumId,
                                   type: ArtworkType.ALBUM,
@@ -4757,7 +4777,7 @@ void _recomputeAllData() {
                                     height: 54,
                                     decoration: BoxDecoration(
                                       color: cs.surfaceContainerHighest,
-                                      shape: BoxShape.circle,
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Icon(
                                       Icons.album_rounded,
@@ -5290,6 +5310,11 @@ void _recomputeAllData() {
           if (albumIndex == -1) return;
           await _controller.playFromQueue(albumSongs, initialIndex: albumIndex);
         },
+        onShuffle: () async {
+          if (albumSongs.isEmpty) return;
+          final shuffled = List<SongModel>.from(albumSongs)..shuffle();
+          await _controller.playFromQueue(shuffled, initialIndex: 0);
+        },
       ),
     );
   }
@@ -5490,29 +5515,34 @@ class ArtistPage extends StatefulWidget {
 
     final content = CustomScrollView(
         slivers: [
-          SliverAppBar.large(
-            title: const SizedBox.shrink(),
-            expandedHeight: 150,
-            collapsedHeight: 80,
-            toolbarHeight: 80,
+          SliverAppBar(
+            pinned: true,
+            elevation: 0,
             scrolledUnderElevation: 0,
             backgroundColor: Colors.transparent,
             surfaceTintColor: Colors.transparent,
             forceMaterialTransparency: true,
             foregroundColor: cs.onSurface,
-            leading: embeddedInHome
+            leading: (embeddedInHome || Navigator.of(context).canPop())
                 ? IconButton(
                     tooltip: 'Back',
                     icon: const Icon(Icons.arrow_back_rounded),
-                    onPressed: onClose,
+                    onPressed: onClose ?? () => Navigator.of(context).maybePop(),
                   )
                 : null,
-            actions: [
-              IconButton(
-                tooltip: 'Play',
-                onPressed: onPlayAll == null ? null : () => onPlayAll!(),
-                icon: const Icon(Icons.play_arrow_rounded),
+            title: Text(
+              artistName,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
               ),
+            ),
+            actions: [
+              if (onPlayAll != null)
+                IconButton(
+                  tooltip: 'Play All',
+                  onPressed: onPlayAll,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                ),
             ],
           ),
           SliverToBoxAdapter(
@@ -5615,7 +5645,8 @@ class ArtistPage extends StatefulWidget {
                   horizontal: 16,
                   vertical: 2,
                 ),
-                leading: ClipOval(
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
                   child: FastArtworkWidget(
                     id: a.albumId,
                     type: ArtworkType.ALBUM,
@@ -5626,7 +5657,7 @@ class ArtistPage extends StatefulWidget {
                       height: 52,
                       decoration: BoxDecoration(
                         color: cs.surfaceContainerHighest,
-                        shape: BoxShape.circle,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
                         Icons.album_rounded,
@@ -5706,6 +5737,7 @@ class AlbumPage extends StatefulWidget {
   final VoidCallback? onClose;
   final Function(SongModel) onOpenNowPlaying;
   final Future<void> Function(SongModel song) onPlaySong;
+  final Future<void> Function()? onShuffle;
 
   static final LinkedHashMap<int, ({Color primary, Color secondary, Color tertiary})>
   _albumPaletteCache =
@@ -5728,6 +5760,7 @@ class AlbumPage extends StatefulWidget {
     this.onClose,
     required this.onOpenNowPlaying,
     required this.onPlaySong,
+    this.onShuffle,
   });
 
   @override
@@ -5768,18 +5801,18 @@ class AlbumPage extends StatefulWidget {
 
       final primary = _boostVibrance(
         Color(primaryColorInt),
-        extraSaturation: 0.5,
-        extraLightness: 0.08,
+        extraSaturation: 0.18,
+        extraLightness: 0.04,
       );
       final secondary = _boostVibrance(
         Color(secondaryColorInt),
-        extraSaturation: 0.42,
+        extraSaturation: 0.14,
         extraLightness: -0.02,
       );
       final tertiary = _boostVibrance(
         Color(tertiaryColorInt),
-        extraSaturation: 0.46,
-        extraLightness: 0.03,
+        extraSaturation: 0.14,
+        extraLightness: 0.02,
       );
 
       final value = (
@@ -5817,6 +5850,7 @@ class AlbumPage extends StatefulWidget {
 
     final content = FutureBuilder<({Color primary, Color secondary, Color tertiary})?>(
         future: paletteFuture,
+        initialData: _albumPaletteCache[albumId],
         builder: (context, snap) {
           final p = snap.data;
           final bgA = p?.primary;
@@ -5824,151 +5858,202 @@ class AlbumPage extends StatefulWidget {
           final bgC = p?.tertiary;
           final top = bgA != null
               ? Color.alphaBlend(
-                  bgA.withOpacity(isDark ? 0.22 : 0.12),
+                  bgA.withOpacity(isDark ? 0.20 : 0.10),
                   cs.surface,
                 )
-              : cs.primaryContainer;
+              : cs.surface;
           final mid = bgB != null
               ? Color.alphaBlend(
-                  bgB.withOpacity(isDark ? 0.16 : 0.08),
+                  bgB.withOpacity(isDark ? 0.12 : 0.06),
                   cs.surface,
                 )
-              : cs.surfaceContainerLow;
+              : cs.surface;
           final accent = bgC != null
               ? Color.alphaBlend(
-                  bgC.withOpacity(isDark ? 0.14 : 0.07),
+                  bgC.withOpacity(isDark ? 0.08 : 0.04),
                   cs.surface,
                 )
-              : cs.tertiaryContainer;
+              : cs.surface;
           return Stack(
             children: [
               Positioned.fill(
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 500),
+                  duration: const Duration(milliseconds: 400),
                   curve: Curves.easeOutCubic,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [top, mid, accent, cs.surface],
-                      stops: const [0.0, 0.38, 0.72, 1.0],
+                      stops: const [0.0, 0.35, 0.70, 1.0],
                     ),
                   ),
                 ),
               ),
               CustomScrollView(
                 slivers: [
-                  SliverAppBar.large(
-                    title: const SizedBox.shrink(),
-                    expandedHeight: 150,
-                    collapsedHeight: 80,
-                    toolbarHeight: 80,
+                  SliverAppBar(
+                    pinned: true,
+                    elevation: 0,
                     scrolledUnderElevation: 0,
                     backgroundColor: Colors.transparent,
                     surfaceTintColor: Colors.transparent,
                     forceMaterialTransparency: true,
                     foregroundColor: cs.onSurface,
-                    leading: embeddedInHome
+                    leading: (embeddedInHome || Navigator.of(context).canPop())
                         ? IconButton(
                             tooltip: 'Back',
                             icon: const Icon(Icons.arrow_back_rounded),
-                            onPressed: onClose,
+                            onPressed: onClose ?? () => Navigator.of(context).maybePop(),
                           )
                         : null,
-                    actions: [
-                      IconButton(
-                        tooltip: 'Play',
-                        onPressed: songs.isEmpty
-                            ? null
-                            : () => onPlaySong(songs.first),
-                        icon: const Icon(Icons.play_arrow_rounded),
+                    title: Text(
+                      albumTitle,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
+                    ),
+                    centerTitle: false,
                   ),
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
-                      child: Row(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ClipOval(
-                            child: FastArtworkWidget(
-                              id: albumId,
-                              type: ArtworkType.ALBUM,
-                              width: 110,
-                              height: 110,
-                              nullArtworkWidget: Container(
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
                                 width: 110,
                                 height: 110,
                                 decoration: BoxDecoration(
-                                  color: cs.surfaceContainerHighest,
-                                  shape: BoxShape.circle,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
                                 ),
-                                child: Icon(
-                                  Icons.album_rounded,
-                                  color: cs.onSurfaceVariant,
-                                  size: 42,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: FastArtworkWidget(
+                                    id: albumId,
+                                    type: ArtworkType.ALBUM,
+                                    width: 110,
+                                    height: 110,
+                                    nullArtworkWidget: Container(
+                                      width: 110,
+                                      height: 110,
+                                      decoration: BoxDecoration(
+                                        color: cs.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(
+                                        Icons.album_rounded,
+                                        color: cs.onSurfaceVariant,
+                                        size: 44,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  albumTitle,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      albumTitle,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                         fontWeight: FontWeight.w900,
                                         letterSpacing: -0.4,
                                       ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  albumArtist,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      albumArtist,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                         color: cs.onSurfaceVariant,
                                         fontWeight: FontWeight.w600,
                                       ),
-                                ),
-                                const SizedBox(height: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: cs.secondaryContainer.withOpacity(
-                                      isDark ? 0.25 : 0.55,
                                     ),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(
-                                      color: cs.outlineVariant.withOpacity(
-                                        0.35,
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 5,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: cs.secondaryContainer.withOpacity(
+                                          isDark ? 0.30 : 0.60,
+                                        ),
+                                        borderRadius: BorderRadius.circular(999),
+                                        border: Border.all(
+                                          color: cs.outlineVariant.withOpacity(0.35),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        subtitle,
+                                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: cs.onSecondaryContainer.withOpacity(0.92),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  child: Text(
-                                    subtitle,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          color: cs.onSecondaryContainer
-                                              .withOpacity(0.92),
-                                        ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: songs.isEmpty
+                                      ? null
+                                      : () => onPlaySong(songs.first),
+                                  icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                                  label: const Text('Play', style: TextStyle(fontWeight: FontWeight.w700)),
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 11),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: FilledButton.tonalIcon(
+                                  onPressed: songs.isEmpty
+                                      ? null
+                                      : () {
+                                          if (onShuffle != null) {
+                                            onShuffle!();
+                                          } else {
+                                            final shuffled = List<SongModel>.from(songs)..shuffle();
+                                            onPlaySong(shuffled.first);
+                                          }
+                                        },
+                                  icon: const Icon(Icons.shuffle_rounded, size: 18),
+                                  label: const Text('Shuffle', style: TextStyle(fontWeight: FontWeight.w700)),
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 11),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

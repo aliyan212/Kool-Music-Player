@@ -99,8 +99,8 @@ ThemeData buildTheme(ColorScheme scheme, Brightness brightness) {
         },
       ),
       navigationBarTheme: NavigationBarThemeData(
-        // Slightly reduced height for a tighter, more modern look
-        height: 66,
+        // Balanced height with comfortable breathing room
+        height: 72,
         backgroundColor: Colors.transparent,
         // Tone down indicator to be subtler
         indicatorColor: scheme.primaryContainer.withOpacity(0.14),
