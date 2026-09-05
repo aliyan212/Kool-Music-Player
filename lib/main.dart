@@ -4474,20 +4474,34 @@ void _recomputeAllData() {
 
     _nowPlayingRouteActive = true;
     try {
-      await showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: false,
-        backgroundColor: Colors.transparent,
-        builder: (context) => NowPlayingPage(
-          player: _controller.player,
-          song: song,
-          songs: _songs,
-          playlist: _controller.currentPlaylist,
-          onQueueChanged: (_) {},
-          onOpenAlbum: _openAlbumPageFromSong,
-          onOpenArtist: _openArtistPageFromSong,
-          onSongUpdated: _updateSongMetadataInPlace,
+      await Navigator.of(context).push(
+        PageRouteBuilder(
+          opaque: false,
+          barrierDismissible: false,
+          barrierColor: Colors.transparent,
+          barrierLabel: 'Now Playing',
+          transitionDuration: const Duration(milliseconds: 400),
+          reverseTransitionDuration: const Duration(milliseconds: 350),
+          pageBuilder: (_, __, ___) => NowPlayingPage(
+            player: _controller.player,
+            song: song,
+            songs: _songs,
+            playlist: _controller.currentPlaylist,
+            onQueueChanged: (_) {},
+            onOpenAlbum: _openAlbumPageFromSong,
+            onOpenArtist: _openArtistPageFromSong,
+            onSongUpdated: _updateSongMetadataInPlace,
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final slide = Tween(
+              begin: const Offset(0.0, 1.0),
+              end: Offset.zero,
+            ).chain(CurveTween(curve: Curves.easeOutCubic));
+            return SlideTransition(
+              position: animation.drive(slide),
+              child: child,
+            );
+          },
         ),
       );
     } finally {

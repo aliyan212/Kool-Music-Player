@@ -101,6 +101,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   bool _disableMotion = false;
   bool _fullscreenLandscape = false;
   bool _fullscreenControlsVisible = false;
+  double _dragOffset = 0.0;
 
   @override
   void initState() {
@@ -1158,683 +1159,741 @@ class _NowPlayingPageState extends State<NowPlayingPage>
         : Colors.black.withValues(alpha: 0.08);
     final iconFgColor = isDark ? Colors.white : Colors.black87;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: TweenAnimationBuilder<Color?>(
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeOut,
-        tween: ColorTween(end: targetTopColor),
-        builder: (context, topColor, child) {
-          return TweenAnimationBuilder<Color?>(
+    return GestureDetector(
+      onVerticalDragUpdate: (details) {
+        if (_fullscreenLandscape) return;
+        if (details.primaryDelta! > 0 || _dragOffset > 0) {
+          setState(() {
+            _dragOffset += details.primaryDelta!;
+            if (_dragOffset < 0) _dragOffset = 0;
+          });
+        }
+      },
+      onVerticalDragEnd: (details) {
+        if (_fullscreenLandscape) return;
+        if (_dragOffset > 150 || (details.primaryVelocity ?? 0) > 400) {
+          Navigator.pop(context);
+        } else {
+          setState(() => _dragOffset = 0.0);
+        }
+      },
+      child: Transform.translate(
+        offset: Offset(0, _dragOffset),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: TweenAnimationBuilder<Color?>(
             duration: const Duration(milliseconds: 600),
             curve: Curves.easeOut,
-            tween: ColorTween(end: targetMidColor),
-            builder: (context, midColor, child) {
+            tween: ColorTween(end: targetTopColor),
+            builder: (context, topColor, child) {
               return TweenAnimationBuilder<Color?>(
                 duration: const Duration(milliseconds: 600),
                 curve: Curves.easeOut,
-                tween: ColorTween(end: targetAccentColor),
-                builder: (context, accentColor, child) {
-                  final c1 = topColor ?? targetTopColor;
-                  final c2 = midColor ?? targetMidColor;
-                  final c3 = accentColor ?? targetAccentColor;
+                tween: ColorTween(end: targetMidColor),
+                builder: (context, midColor, child) {
+                  return TweenAnimationBuilder<Color?>(
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeOut,
+                    tween: ColorTween(end: targetAccentColor),
+                    builder: (context, accentColor, child) {
+                      final c1 = topColor ?? targetTopColor;
+                      final c2 = midColor ?? targetMidColor;
+                      final c3 = accentColor ?? targetAccentColor;
 
-                  return AnimatedBuilder(
-                    animation: _bgGradientController,
-                    builder: (context, _) {
-                      final size = MediaQuery.of(context).size;
-                      final maxDim = math.max(size.width, size.height);
-                      final blobSize = maxDim * 1.2;
+                      return AnimatedBuilder(
+                        animation: _bgGradientController,
+                        builder: (context, _) {
+                          final size = MediaQuery.of(context).size;
+                          final maxDim = math.max(size.width, size.height);
+                          final blobSize = maxDim * 1.2;
 
-                      final t = _bgGradientController.value;
+                          final t = _bgGradientController.value;
 
-                      // Lissajous curve paths mapped to [0, 1] for Positioned
-                      final x1 = (math.sin(t * math.pi * 2) + 1) / 2;
-                      final y1 = (math.cos(t * math.pi * 4) + 1) / 2;
+                          // Lissajous curve paths mapped to [0, 1] for Positioned
+                          final x1 = (math.sin(t * math.pi * 2) + 1) / 2;
+                          final y1 = (math.cos(t * math.pi * 4) + 1) / 2;
 
-                      final x2 = (math.cos(t * math.pi * 2 + math.pi) + 1) / 2;
-                      final y2 = (math.sin(t * math.pi * 6) + 1) / 2;
+                          final x2 =
+                              (math.cos(t * math.pi * 2 + math.pi) + 1) / 2;
+                          final y2 = (math.sin(t * math.pi * 6) + 1) / 2;
 
-                      final x3 =
-                          (math.sin(t * math.pi * 4 + math.pi / 4) + 1) / 2;
-                      final y3 =
-                          (math.cos(t * math.pi * 2 + math.pi / 4) + 1) / 2;
+                          final x3 =
+                              (math.sin(t * math.pi * 4 + math.pi / 4) + 1) / 2;
+                          final y3 =
+                              (math.cos(t * math.pi * 2 + math.pi / 4) + 1) / 2;
 
-                      final x4 =
-                          (math.cos(t * math.pi * 2 + math.pi / 2) + 1) / 2;
-                      final y4 =
-                          (math.sin(t * math.pi * 4 + math.pi / 2) + 1) / 2;
+                          final x4 =
+                              (math.cos(t * math.pi * 2 + math.pi / 2) + 1) / 2;
+                          final y4 =
+                              (math.sin(t * math.pi * 4 + math.pi / 2) + 1) / 2;
 
-                      Widget buildBlob(
-                        double xOffset,
-                        double yOffset,
-                        Color color,
-                        double scale,
-                      ) {
-                        return Positioned(
-                          left: xOffset * size.width - (blobSize * scale) / 2,
-                          top: yOffset * size.height - (blobSize * scale) / 2,
-                          child: Container(
-                            width: blobSize * scale,
-                            height: blobSize * scale,
+                          Widget buildBlob(
+                            double xOffset,
+                            double yOffset,
+                            Color color,
+                            double scale,
+                          ) {
+                            return Positioned(
+                              left:
+                                  xOffset * size.width - (blobSize * scale) / 2,
+                              top:
+                                  yOffset * size.height -
+                                  (blobSize * scale) / 2,
+                              child: Container(
+                                width: blobSize * scale,
+                                height: blobSize * scale,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: RadialGradient(
+                                    colors: [
+                                      color.withValues(alpha: 1.0),
+                                      color.withValues(alpha: 0.75),
+                                      color.withValues(alpha: 0.0),
+                                    ],
+                                    stops: const [0.0, 0.45, 1.0],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
+                          final gradientLayer = DecoratedBox(
                             decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: RadialGradient(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
                                 colors: [
-                                  color.withValues(alpha: 1.0),
-                                  color.withValues(alpha: 0.75),
-                                  color.withValues(alpha: 0.0),
+                                  c1.withValues(alpha: 0.8),
+                                  c3.withValues(alpha: 0.8),
                                 ],
-                                stops: const [0.0, 0.45, 1.0],
                               ),
                             ),
-                          ),
-                        );
-                      }
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                buildBlob(x1, y1 * 0.5, c1, 1.4),
+                                buildBlob(x2, (y2 * 0.5) + 0.5, c2, 1.5),
+                                buildBlob(x3, y3, c3, 1.3),
+                                buildBlob(
+                                  x4,
+                                  (y4 * 0.3) + 0.7,
+                                  c2,
+                                  1.6,
+                                ), // Bottom coverage
+                              ],
+                            ),
+                          );
 
-                      final gradientLayer = DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              c1.withValues(alpha: 0.8),
-                              c3.withValues(alpha: 0.8),
-                            ],
-                          ),
-                        ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            buildBlob(x1, y1 * 0.5, c1, 1.4),
-                            buildBlob(x2, (y2 * 0.5) + 0.5, c2, 1.5),
-                            buildBlob(x3, y3, c3, 1.3),
-                            buildBlob(
-                              x4,
-                              (y4 * 0.3) + 0.7,
-                              c2,
-                              1.6,
-                            ), // Bottom coverage
-                          ],
-                        ),
-                      );
-
-                      final vignette = DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: RadialGradient(
-                            center: Alignment.topCenter,
-                            radius: 1.1,
-                            colors: [
-                              Colors.transparent,
-                              (isDark ? Colors.black : Colors.white).withValues(
-                                alpha: isDark ? 0.22 : 0.16,
+                          final vignette = DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: RadialGradient(
+                                center: Alignment.topCenter,
+                                radius: 1.1,
+                                colors: [
+                                  Colors.transparent,
+                                  (isDark ? Colors.black : Colors.white)
+                                      .withValues(alpha: isDark ? 0.22 : 0.16),
+                                ],
+                                stops: const [0.55, 1.0],
                               ),
-                            ],
-                            stops: const [0.55, 1.0],
-                          ),
-                        ),
-                      );
+                            ),
+                          );
 
-                      return Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          gradientLayer,
-                          IgnorePointer(child: vignette),
-                          child!,
-                        ],
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              gradientLayer,
+                              IgnorePointer(child: vignette),
+                              child!,
+                            ],
+                          );
+                        },
                       );
                     },
+                    child: child,
                   );
                 },
                 child: child,
               );
             },
-            child: child,
-          );
-        },
-        child: Column(
-          children: [
-            SizedBox(
-              height: MediaQuery.of(context).viewPadding.top > 0
-                  ? MediaQuery.of(context).viewPadding.top
-                  : (MediaQueryData.fromView(View.of(context)).viewPadding.top >
-                            0
-                        ? MediaQueryData.fromView(
-                            View.of(context),
-                          ).viewPadding.top
-                        : 42.0), // Safe fallback for S10+ and similar devices
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton.filledTonal(
-                    icon: const Icon(Icons.keyboard_arrow_down),
-                    onPressed: () => Navigator.pop(context),
-                    style: IconButton.styleFrom(
-                      backgroundColor: iconBgColor,
-                      foregroundColor: iconFgColor,
-                    ),
+            child: Column(
+              children: [
+                SizedBox(
+                  height: MediaQuery.of(context).viewPadding.top > 0
+                      ? MediaQuery.of(context).viewPadding.top
+                      : (MediaQueryData.fromView(
+                                  View.of(context),
+                                ).viewPadding.top >
+                                0
+                            ? MediaQueryData.fromView(
+                                View.of(context),
+                              ).viewPadding.top
+                            : 42.0), // Safe fallback for S10+ and similar devices
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
                   ),
-                  Text(
-                    "Now Playing",
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelLarge?.copyWith(color: textColorSecondary),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      if (!_fullscreenLandscape) ...[
-                        IconButton.filledTonal(
-                          icon: const Icon(Icons.queue_music_rounded),
-                          onPressed: () => Navigator.push(
-                            context,
-                            PageRouteBuilder(
-                              opaque: false,
-                              pageBuilder: (_, __, ___) => QueuePage(
-                                player: widget.player,
-                                songs: widget.songs,
-                                currentIndex: widget.player.currentIndex ?? 0,
-                                onPlayIndex: (index) => widget.player.seek(
-                                  Duration.zero,
-                                  index: index,
-                                ),
-                                playlist: widget.playlist,
-                                onQueueChanged: widget.onQueueChanged ?? (_) {},
-                              ),
-                              transitionsBuilder:
-                                  (
-                                    context,
-                                    animation,
-                                    secondaryAnimation,
-                                    child,
-                                  ) {
-                                    return SlideTransition(
-                                      position:
-                                          Tween(
-                                                begin: const Offset(0.0, 1.0),
-                                                end: Offset.zero,
-                                              )
-                                              .chain(
-                                                CurveTween(
-                                                  curve: Curves.easeOutCubic,
-                                                ),
-                                              )
-                                              .animate(animation),
-                                      child: child,
-                                    );
-                                  },
-                            ),
-                          ),
-                          style: IconButton.styleFrom(
-                            backgroundColor: iconBgColor,
-                            foregroundColor: iconFgColor,
-                          ),
+                      IconButton.filledTonal(
+                        icon: const Icon(Icons.keyboard_arrow_down),
+                        onPressed: () => Navigator.pop(context),
+                        style: IconButton.styleFrom(
+                          backgroundColor: iconBgColor,
+                          foregroundColor: iconFgColor,
                         ),
-                        const SizedBox(width: 4),
-                        IconButton.filledTonal(
-                          icon: Icon(
-                            _showLyrics
-                                ? Icons.image_rounded
-                                : Icons.lyrics_rounded,
-                          ),
-                          onPressed: () => _setLyricsVisible(!_showLyrics),
-                          style: IconButton.styleFrom(
-                            backgroundColor: iconBgColor,
-                            foregroundColor: iconFgColor,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                      ],
-                      PopupMenuButton<String>(
-                        icon: Icon(
-                          Icons.more_vert_rounded,
+                      ),
+                      Text(
+                        "Now Playing",
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           color: textColorSecondary,
                         ),
-                        tooltip: 'More actions',
-                        color: cs.surface,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        onSelected: (value) async {
-                          HapticFeedback.selectionClick();
-                          if (value == 'fullscreen_toggle') {
-                            await _setFullscreenLandscape(
-                              !_fullscreenLandscape,
-                            );
-                          } else if (value == 'edit_tags') {
-                            final result = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => TagEditorDialog(
-                                song: _displayedSong,
-                                onSaved: _reloadDisplayedSongMetadata,
-                                onSongUpdated: (updatedSong) {
-                                  setState(() {
-                                    _displayedSong = updatedSong;
-                                  });
-                                  widget.onSongUpdated?.call(updatedSong);
-                                },
-                                runWithPlaybackSuspended: (action) =>
-                                    runWithPlayerPlaybackSuspended(
-                                      widget.player,
-                                      widget.playlist,
-                                      action,
-                                      targetFilePath: _displayedSong.data,
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!_fullscreenLandscape) ...[
+                            IconButton.filledTonal(
+                              icon: const Icon(Icons.queue_music_rounded),
+                              onPressed: () => Navigator.push(
+                                context,
+                                PageRouteBuilder(
+                                  opaque: false,
+                                  pageBuilder: (_, __, ___) => QueuePage(
+                                    player: widget.player,
+                                    songs: widget.songs,
+                                    currentIndex:
+                                        widget.player.currentIndex ?? 0,
+                                    onPlayIndex: (index) => widget.player.seek(
+                                      Duration.zero,
+                                      index: index,
                                     ),
-                              ),
-                            );
-                            if (result == true) {
-                              _reloadDisplayedSongMetadata();
-                            }
-                          } else if (value == 'edit_lyrics') {
-                            final result = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => LyricsEditorDialog(
-                                song: _displayedSong,
-                                currentLyrics: _rawLyrics,
-                                onSaved: () => _loadLyrics(),
-                                onLyricsSaved: (lyrics) {
-                                  _loadLyrics();
-                                },
-                                runWithPlaybackSuspended: (action) =>
-                                    runWithPlayerPlaybackSuspended(
-                                      widget.player,
-                                      widget.playlist,
-                                      action,
-                                      targetFilePath: _displayedSong.data,
-                                    ),
-                              ),
-                            );
-                            if (result == true) {
-                              _loadLyrics();
-                            }
-                          }
-                        },
-                        itemBuilder: (context) {
-                          final menuTextColor = isDark
-                              ? Colors.white
-                              : Colors.black87;
-                          final menuIconColor = isDark
-                              ? Colors.white70
-                              : Colors.black54;
-                          final fullscreenLabel = _fullscreenLandscape
-                              ? 'Exit fullscreen'
-                              : 'Fullscreen';
-                          final fullscreenIcon = _fullscreenLandscape
-                              ? Icons.fullscreen_exit_rounded
-                              : Icons.fullscreen_rounded;
-                          return [
-                            PopupMenuItem(
-                              value: 'fullscreen_toggle',
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    fullscreenIcon,
-                                    size: 20,
-                                    color: menuIconColor,
+                                    playlist: widget.playlist,
+                                    onQueueChanged:
+                                        widget.onQueueChanged ?? (_) {},
                                   ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    fullscreenLabel,
-                                    style: TextStyle(color: menuTextColor),
-                                  ),
-                                ],
+                                  transitionsBuilder:
+                                      (
+                                        context,
+                                        animation,
+                                        secondaryAnimation,
+                                        child,
+                                      ) {
+                                        return SlideTransition(
+                                          position:
+                                              Tween(
+                                                    begin: const Offset(
+                                                      0.0,
+                                                      1.0,
+                                                    ),
+                                                    end: Offset.zero,
+                                                  )
+                                                  .chain(
+                                                    CurveTween(
+                                                      curve:
+                                                          Curves.easeOutCubic,
+                                                    ),
+                                                  )
+                                                  .animate(animation),
+                                          child: child,
+                                        );
+                                      },
+                                ),
+                              ),
+                              style: IconButton.styleFrom(
+                                backgroundColor: iconBgColor,
+                                foregroundColor: iconFgColor,
                               ),
                             ),
-                            if (!_fullscreenLandscape) ...[
-                              PopupMenuItem(
-                                value: 'edit_tags',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.edit_rounded,
-                                      size: 20,
-                                      color: menuIconColor,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      'Edit Tags',
-                                      style: TextStyle(color: menuTextColor),
-                                    ),
-                                  ],
-                                ),
+                            const SizedBox(width: 4),
+                            IconButton.filledTonal(
+                              icon: Icon(
+                                _showLyrics
+                                    ? Icons.image_rounded
+                                    : Icons.lyrics_rounded,
                               ),
-                              PopupMenuItem(
-                                value: 'edit_lyrics',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.lyrics_rounded,
-                                      size: 20,
-                                      color: menuIconColor,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      'Edit Lyrics',
-                                      style: TextStyle(color: menuTextColor),
-                                    ),
-                                  ],
-                                ),
+                              onPressed: () => _setLyricsVisible(!_showLyrics),
+                              style: IconButton.styleFrom(
+                                backgroundColor: iconBgColor,
+                                foregroundColor: iconFgColor,
                               ),
-                            ],
-                          ];
-                        },
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          PopupMenuButton<String>(
+                            icon: Icon(
+                              Icons.more_vert_rounded,
+                              color: textColorSecondary,
+                            ),
+                            tooltip: 'More actions',
+                            color: cs.surface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            onSelected: (value) async {
+                              HapticFeedback.selectionClick();
+                              if (value == 'fullscreen_toggle') {
+                                await _setFullscreenLandscape(
+                                  !_fullscreenLandscape,
+                                );
+                              } else if (value == 'edit_tags') {
+                                final result = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => TagEditorDialog(
+                                    song: _displayedSong,
+                                    onSaved: _reloadDisplayedSongMetadata,
+                                    onSongUpdated: (updatedSong) {
+                                      setState(() {
+                                        _displayedSong = updatedSong;
+                                      });
+                                      widget.onSongUpdated?.call(updatedSong);
+                                    },
+                                    runWithPlaybackSuspended: (action) =>
+                                        runWithPlayerPlaybackSuspended(
+                                          widget.player,
+                                          widget.playlist,
+                                          action,
+                                          targetFilePath: _displayedSong.data,
+                                        ),
+                                  ),
+                                );
+                                if (result == true) {
+                                  _reloadDisplayedSongMetadata();
+                                }
+                              } else if (value == 'edit_lyrics') {
+                                final result = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => LyricsEditorDialog(
+                                    song: _displayedSong,
+                                    currentLyrics: _rawLyrics,
+                                    onSaved: () => _loadLyrics(),
+                                    onLyricsSaved: (lyrics) {
+                                      _loadLyrics();
+                                    },
+                                    runWithPlaybackSuspended: (action) =>
+                                        runWithPlayerPlaybackSuspended(
+                                          widget.player,
+                                          widget.playlist,
+                                          action,
+                                          targetFilePath: _displayedSong.data,
+                                        ),
+                                  ),
+                                );
+                                if (result == true) {
+                                  _loadLyrics();
+                                }
+                              }
+                            },
+                            itemBuilder: (context) {
+                              final menuTextColor = isDark
+                                  ? Colors.white
+                                  : Colors.black87;
+                              final menuIconColor = isDark
+                                  ? Colors.white70
+                                  : Colors.black54;
+                              final fullscreenLabel = _fullscreenLandscape
+                                  ? 'Exit fullscreen'
+                                  : 'Fullscreen';
+                              final fullscreenIcon = _fullscreenLandscape
+                                  ? Icons.fullscreen_exit_rounded
+                                  : Icons.fullscreen_rounded;
+                              return [
+                                PopupMenuItem(
+                                  value: 'fullscreen_toggle',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        fullscreenIcon,
+                                        size: 20,
+                                        color: menuIconColor,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        fullscreenLabel,
+                                        style: TextStyle(color: menuTextColor),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (!_fullscreenLandscape) ...[
+                                  PopupMenuItem(
+                                    value: 'edit_tags',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.edit_rounded,
+                                          size: 20,
+                                          color: menuIconColor,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Edit Tags',
+                                          style: TextStyle(
+                                            color: menuTextColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'edit_lyrics',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.lyrics_rounded,
+                                          size: 20,
+                                          color: menuIconColor,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Edit Lyrics',
+                                          style: TextStyle(
+                                            color: menuTextColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ];
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _fullscreenLandscape
-                  ? _buildFullscreenLandscapeView(
-                      isDark: isDark,
-                      textColor: textColor,
-                      textColorSecondary: textColorSecondary,
-                      iconBgColor: iconBgColor,
-                      iconFgColor: iconFgColor,
-                    )
-                  : OrientationBuilder(
-                      builder: (context, orientation) {
-                        final isLandscape =
-                            orientation == Orientation.landscape;
+                ),
+                Expanded(
+                  child: _fullscreenLandscape
+                      ? _buildFullscreenLandscapeView(
+                          isDark: isDark,
+                          textColor: textColor,
+                          textColorSecondary: textColorSecondary,
+                          iconBgColor: iconBgColor,
+                          iconFgColor: iconFgColor,
+                        )
+                      : OrientationBuilder(
+                          builder: (context, orientation) {
+                            final isLandscape =
+                                orientation == Orientation.landscape;
 
-                        Widget artworkOrLyrics() {
-                          return GestureDetector(
-                            onTap: () => _setLyricsVisible(!_showLyrics),
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 400),
-                              child: _showLyrics
-                                  ? _buildLyricsView()
-                                  : _buildArtworkView(),
-                            ),
-                          );
-                        }
-
-                        Widget songMeta({double titleSize = 22}) {
-                          return Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _displayedSong.title,
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      color: textColor,
-                                      letterSpacing: -0.5,
-                                      fontSize: titleSize,
-                                    ),
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 6),
-                              GestureDetector(
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  _openDetailAfterClosingNowPlaying(
-                                    widget.onOpenArtist,
-                                  );
-                                },
-                                child: Text(
-                                  _displayedSong.artist ?? "Unknown Artist",
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(
-                                        color: textColor.withValues(alpha: 0.8),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                            Widget artworkOrLyrics() {
+                              return GestureDetector(
+                                onTap: () => _setLyricsVisible(!_showLyrics),
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 400),
+                                  child: _showLyrics
+                                      ? _buildLyricsView()
+                                      : _buildArtworkView(),
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              GestureDetector(
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  _openDetailAfterClosingNowPlaying(
-                                    widget.onOpenAlbum,
-                                  );
-                                },
-                                child: Text(
-                                  _displayedSong.album ?? "Unknown Album",
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: textColorSecondary,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          );
-                        }
+                              );
+                            }
 
-                        Widget seekAndTime() {
-                          return ValueListenableBuilder<bool>(
-                            valueListenable: appIsForeground,
-                            builder: (context, isFg, _) {
-                              if (!isFg) {
-                                final position = widget.player.position;
-                                final total =
-                                    widget.player.duration ?? Duration.zero;
-                                final isPlaying = widget.player.playing;
-                                return Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    SquigglySeekBar(
-                                      position: position,
-                                      duration: total,
-                                      isPlaying: isPlaying,
-                                      onChanged: (val) =>
-                                          widget.player.seek(val),
-                                      isDark: isDark,
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            formatTime(position.inMilliseconds),
-                                            style: TextStyle(
-                                              color: textColorSecondary,
+                            Widget songMeta({double titleSize = 22}) {
+                              return Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _displayedSong.title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          color: textColor,
+                                          letterSpacing: -0.5,
+                                          fontSize: titleSize,
+                                        ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.selectionClick();
+                                      _openDetailAfterClosingNowPlaying(
+                                        widget.onOpenArtist,
+                                      );
+                                    },
+                                    child: Text(
+                                      _displayedSong.artist ?? "Unknown Artist",
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: textColor.withValues(
+                                              alpha: 0.8,
                                             ),
+                                            fontWeight: FontWeight.w500,
                                           ),
-                                          Text(
-                                            formatTime(total.inMilliseconds),
-                                            style: TextStyle(
-                                              color: textColorSecondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ],
-                                );
-                              }
+                                  ),
+                                  const SizedBox(height: 2),
+                                  GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.selectionClick();
+                                      _openDetailAfterClosingNowPlaying(
+                                        widget.onOpenAlbum,
+                                      );
+                                    },
+                                    child: Text(
+                                      _displayedSong.album ?? "Unknown Album",
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: textColorSecondary,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
 
-                              return StreamBuilder<PlayerState>(
-                                stream: widget.player.playerStateStream,
-                                builder: (context, playerSnapshot) {
-                                  final isPlaying =
-                                      playerSnapshot.data?.playing ?? false;
-                                  return StreamBuilder<Duration>(
-                                    stream: widget.player.positionStream,
-                                    builder: (context, snapshot) {
-                                      final position =
-                                          snapshot.data ?? Duration.zero;
-                                      final total =
-                                          widget.player.duration ??
-                                          Duration.zero;
-                                      return Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          SquigglySeekBar(
-                                            position: position,
-                                            duration: total,
-                                            isPlaying: isPlaying,
-                                            onChanged: (val) =>
-                                                widget.player.seek(val),
-                                            isDark: isDark,
+                            Widget seekAndTime() {
+                              return ValueListenableBuilder<bool>(
+                                valueListenable: appIsForeground,
+                                builder: (context, isFg, _) {
+                                  if (!isFg) {
+                                    final position = widget.player.position;
+                                    final total =
+                                        widget.player.duration ?? Duration.zero;
+                                    final isPlaying = widget.player.playing;
+                                    return Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SquigglySeekBar(
+                                          position: position,
+                                          duration: total,
+                                          isPlaying: isPlaying,
+                                          onChanged: (val) =>
+                                              widget.player.seek(val),
+                                          isDark: isDark,
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
                                           ),
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 10,
-                                            ),
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                Text(
-                                                  formatTime(
-                                                    position.inMilliseconds,
-                                                  ),
-                                                  style: TextStyle(
-                                                    color: textColorSecondary,
-                                                  ),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                formatTime(
+                                                  position.inMilliseconds,
                                                 ),
-                                                Text(
-                                                  formatTime(
-                                                    total.inMilliseconds,
-                                                  ),
-                                                  style: TextStyle(
-                                                    color: textColorSecondary,
-                                                  ),
+                                                style: TextStyle(
+                                                  color: textColorSecondary,
                                                 ),
-                                              ],
-                                            ),
+                                              ),
+                                              Text(
+                                                formatTime(
+                                                  total.inMilliseconds,
+                                                ),
+                                                style: TextStyle(
+                                                  color: textColorSecondary,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ],
+                                        ),
+                                      ],
+                                    );
+                                  }
+
+                                  return StreamBuilder<PlayerState>(
+                                    stream: widget.player.playerStateStream,
+                                    builder: (context, playerSnapshot) {
+                                      final isPlaying =
+                                          playerSnapshot.data?.playing ?? false;
+                                      return StreamBuilder<Duration>(
+                                        stream: widget.player.positionStream,
+                                        builder: (context, snapshot) {
+                                          final position =
+                                              snapshot.data ?? Duration.zero;
+                                          final total =
+                                              widget.player.duration ??
+                                              Duration.zero;
+                                          return Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              SquigglySeekBar(
+                                                position: position,
+                                                duration: total,
+                                                isPlaying: isPlaying,
+                                                onChanged: (val) =>
+                                                    widget.player.seek(val),
+                                                isDark: isDark,
+                                              ),
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                    ),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    Text(
+                                                      formatTime(
+                                                        position.inMilliseconds,
+                                                      ),
+                                                      style: TextStyle(
+                                                        color:
+                                                            textColorSecondary,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      formatTime(
+                                                        total.inMilliseconds,
+                                                      ),
+                                                      style: TextStyle(
+                                                        color:
+                                                            textColorSecondary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
                                       );
                                     },
                                   );
                                 },
                               );
-                            },
-                          );
-                        }
+                            }
 
-                        if (!isLandscape) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24.0,
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Expanded(child: artworkOrLyrics()),
-                                const SizedBox(height: 32),
-                                songMeta(titleSize: 22),
-                                const SizedBox(height: 28),
-                                seekAndTime(),
-                                const SizedBox(height: 24),
-                                NowPlayingTransport(
-                                  player: widget.player,
-                                  isDark: isDark,
-                                  iconFgColor: iconFgColor,
-                                  accentColor: _primaryColor ?? _secondaryColor,
-                                  onPlayPressed: () async {
-                                    final ok =
-                                        await ensureNotificationPermissionIfNeeded();
-                                    if (!ok && context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: const Text(
-                                            'Notifications are blocked, so the player notification can\'t be shown.',
-                                          ),
-                                          behavior: SnackBarBehavior.floating,
-                                          action: SnackBarAction(
-                                            label: 'Settings',
-                                            onPressed: () =>
-                                                AndroidNotifications.openAppNotificationSettings(),
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    widget.player.play();
-                                  },
+                            if (!isLandscape) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24.0,
                                 ),
-                                const SizedBox(height: 40),
-                              ],
-                            ),
-                          );
-                        }
-
-                        // Landscape: use two columns and allow the right side to scroll if needed.
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 5,
-                                child: Center(child: artworkOrLyrics()),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                flex: 6,
-                                child: SingleChildScrollView(
-                                  physics: const BouncingScrollPhysics(),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const SizedBox(height: 8),
-                                      songMeta(titleSize: 20),
-                                      const SizedBox(height: 16),
-                                      seekAndTime(),
-                                      const SizedBox(height: 14),
-                                      NowPlayingTransport(
-                                        player: widget.player,
-                                        isDark: isDark,
-                                        iconFgColor: iconFgColor,
-                                        accentColor:
-                                            _primaryColor ?? _secondaryColor,
-                                        onPlayPressed: () async {
-                                          final ok =
-                                              await ensureNotificationPermissionIfNeeded();
-                                          if (!ok && context.mounted) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: const Text(
-                                                  'Notifications are blocked, so the player notification can\'t be shown.',
-                                                ),
-                                                behavior:
-                                                    SnackBarBehavior.floating,
-                                                action: SnackBarAction(
-                                                  label: 'Settings',
-                                                  onPressed: () =>
-                                                      AndroidNotifications.openAppNotificationSettings(),
-                                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Expanded(child: artworkOrLyrics()),
+                                    const SizedBox(height: 32),
+                                    songMeta(titleSize: 22),
+                                    const SizedBox(height: 28),
+                                    seekAndTime(),
+                                    const SizedBox(height: 24),
+                                    NowPlayingTransport(
+                                      player: widget.player,
+                                      isDark: isDark,
+                                      iconFgColor: iconFgColor,
+                                      accentColor:
+                                          _primaryColor ?? _secondaryColor,
+                                      onPlayPressed: () async {
+                                        final ok =
+                                            await ensureNotificationPermissionIfNeeded();
+                                        if (!ok && context.mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: const Text(
+                                                'Notifications are blocked, so the player notification can\'t be shown.',
                                               ),
-                                            );
-                                          }
-                                          widget.player.play();
-                                        },
-                                      ),
-                                      const SizedBox(height: 16),
-                                    ],
-                                  ),
+                                              behavior:
+                                                  SnackBarBehavior.floating,
+                                              action: SnackBarAction(
+                                                label: 'Settings',
+                                                onPressed: () =>
+                                                    AndroidNotifications.openAppNotificationSettings(),
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                        widget.player.play();
+                                      },
+                                    ),
+                                    const SizedBox(height: 40),
+                                  ],
                                 ),
+                              );
+                            }
+
+                            // Landscape: use two columns and allow the right side to scroll if needed.
+                            return Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 5,
+                                    child: Center(child: artworkOrLyrics()),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    flex: 6,
+                                    child: SingleChildScrollView(
+                                      physics: const BouncingScrollPhysics(),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const SizedBox(height: 8),
+                                          songMeta(titleSize: 20),
+                                          const SizedBox(height: 16),
+                                          seekAndTime(),
+                                          const SizedBox(height: 14),
+                                          NowPlayingTransport(
+                                            player: widget.player,
+                                            isDark: isDark,
+                                            iconFgColor: iconFgColor,
+                                            accentColor:
+                                                _primaryColor ??
+                                                _secondaryColor,
+                                            onPlayPressed: () async {
+                                              final ok =
+                                                  await ensureNotificationPermissionIfNeeded();
+                                              if (!ok && context.mounted) {
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  SnackBar(
+                                                    content: const Text(
+                                                      'Notifications are blocked, so the player notification can\'t be shown.',
+                                                    ),
+                                                    behavior: SnackBarBehavior
+                                                        .floating,
+                                                    action: SnackBarAction(
+                                                      label: 'Settings',
+                                                      onPressed: () =>
+                                                          AndroidNotifications.openAppNotificationSettings(),
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                              widget.player.play();
+                                            },
+                                          ),
+                                          const SizedBox(height: 16),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
