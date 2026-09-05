@@ -94,7 +94,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   late final AnimationController _bgGradientController;
   late final AnimationController _artworkPulseController;
-  late final PageController _pageController;
+  late PageController _pageController;
   StreamSubscription<PlayerState>? _nowPlayingPlayerStateSub;
   StreamSubscription<Duration>? _positionSub;
 
@@ -200,6 +200,11 @@ class _NowPlayingPageState extends State<NowPlayingPage>
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
         );
+      } else if (!_pageController.hasClients) {
+        // If lyrics were showing, the PageView is unmounted and has no clients.
+        // We must recreate the controller with the new index so it remounts at the right page!
+        _pageController.dispose();
+        _pageController = PageController(initialPage: index);
       }
 
       final hasHighRes = hasCachedArtworkBytes(newSong.id, size: 900);
