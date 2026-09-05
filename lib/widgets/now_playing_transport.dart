@@ -20,7 +20,9 @@ class NowPlayingTransport extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final sideButtonBg = isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.08);
+    final sideButtonBg = isDark
+        ? Colors.white10
+        : Colors.black.withValues(alpha: 0.08);
     final accent = accentColor ?? scheme.primary;
     final activeSideBg = Color.alphaBlend(
       accent.withValues(alpha: isDark ? 0.38 : 0.24),
@@ -28,10 +30,14 @@ class NowPlayingTransport extends StatelessWidget {
     );
     final activeSideFg = isDark ? Colors.white : scheme.onPrimary;
     final mainButtonBg = Color.alphaBlend(
-      (isDark ? Colors.white : Colors.black).withValues(alpha: isDark ? 0.2 : 0.06),
+      (isDark ? Colors.white : Colors.black).withValues(
+        alpha: isDark ? 0.2 : 0.06,
+      ),
       accent,
     );
-    final sideShadow = (isDark ? Colors.black : scheme.primary).withValues(alpha: 0.2);
+    final sideShadow = (isDark ? Colors.black : scheme.primary).withValues(
+      alpha: 0.2,
+    );
     final mainShadow = accent.withValues(alpha: isDark ? 0.42 : 0.28);
 
     Widget sideButton({
@@ -84,106 +90,113 @@ class NowPlayingTransport extends StatelessWidget {
       );
     }
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        StreamBuilder<bool>(
-          stream: player.shuffleModeEnabledStream,
-          initialData: player.shuffleModeEnabled,
-          builder: (context, snapshot) {
-            final enabled = snapshot.data ?? false;
-            return sideButton(
-              tooltip: enabled ? 'Shuffle on' : 'Shuffle off',
-              isActive: enabled,
-              onPressed: () async {
-                final next = !player.shuffleModeEnabled;
-                await player.setShuffleModeEnabled(next);
-                if (next) {
-                  await player.shuffle();
-                }
-              },
-              icon: Icons.shuffle_rounded,
-            );
-          },
-        ),
-        const SizedBox(width: 12),
-        sideButton(
-          tooltip: 'Previous',
-          onPressed: player.hasPrevious ? () => player.seekToPrevious() : null,
-          icon: Icons.skip_previous_rounded,
-        ),
-        const SizedBox(width: 16),
-        StreamBuilder<PlayerState>(
-          stream: player.playerStateStream,
-          builder: (context, snapshot) {
-            final playing = snapshot.data?.playing ?? false;
-            return Tooltip(
-              message: playing ? 'Pause' : 'Play',
-              child: Material(
-                color: mainButtonBg,
-                shape: const CircleBorder(),
-                elevation: 8,
-                shadowColor: mainShadow,
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: () async {
-                    if (playing) {
-                      await player.pause();
-                    } else {
-                      await onPlayPressed();
-                    }
-                  },
-                  child: SizedBox(
-                    width: 74,
-                    height: 74,
-                    child: Icon(
-                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      size: 38,
-                      color: scheme.onPrimary,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          StreamBuilder<bool>(
+            stream: player.shuffleModeEnabledStream,
+            initialData: player.shuffleModeEnabled,
+            builder: (context, snapshot) {
+              final enabled = snapshot.data ?? false;
+              return sideButton(
+                tooltip: enabled ? 'Shuffle on' : 'Shuffle off',
+                isActive: enabled,
+                onPressed: () async {
+                  final next = !player.shuffleModeEnabled;
+                  await player.setShuffleModeEnabled(next);
+                  if (next) {
+                    await player.shuffle();
+                  }
+                },
+                icon: Icons.shuffle_rounded,
+              );
+            },
+          ),
+          const SizedBox(width: 12),
+          sideButton(
+            tooltip: 'Previous',
+            onPressed: player.hasPrevious
+                ? () => player.seekToPrevious()
+                : null,
+            icon: Icons.skip_previous_rounded,
+          ),
+          const SizedBox(width: 16),
+          StreamBuilder<PlayerState>(
+            stream: player.playerStateStream,
+            builder: (context, snapshot) {
+              final playing = snapshot.data?.playing ?? false;
+              return Tooltip(
+                message: playing ? 'Pause' : 'Play',
+                child: Material(
+                  color: mainButtonBg,
+                  shape: const CircleBorder(),
+                  elevation: 8,
+                  shadowColor: mainShadow,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () async {
+                      if (playing) {
+                        await player.pause();
+                      } else {
+                        await onPlayPressed();
+                      }
+                    },
+                    child: SizedBox(
+                      width: 74,
+                      height: 74,
+                      child: Icon(
+                        playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        size: 38,
+                        color: scheme.onPrimary,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(width: 16),
-        sideButton(
-          tooltip: 'Next',
-          onPressed: player.hasNext ? () => player.seekToNext() : null,
-          icon: Icons.skip_next_rounded,
-        ),
-        const SizedBox(width: 12),
-        StreamBuilder<LoopMode>(
-          stream: player.loopModeStream,
-          initialData: player.loopMode,
-          builder: (context, snapshot) {
-            final loopMode = snapshot.data ?? LoopMode.off;
-            final icon = switch (loopMode) {
-              LoopMode.off => Icons.repeat_rounded,
-              LoopMode.all => Icons.repeat_rounded,
-              LoopMode.one => Icons.repeat_one_rounded,
-            };
-            return sideButton(
-              tooltip: switch (loopMode) {
-                LoopMode.off => 'Repeat off',
-                LoopMode.all => 'Repeat all',
-                LoopMode.one => 'Repeat one',
-              },
-              isActive: loopMode != LoopMode.off,
-              onPressed: () async {
-                final next = switch (player.loopMode) {
-                  LoopMode.off => LoopMode.all,
-                  LoopMode.all => LoopMode.one,
-                  LoopMode.one => LoopMode.off,
-                };
-                await player.setLoopMode(next);
-              },
-              icon: icon,
-            );
-          },
-        ),
-      ],
+              );
+            },
+          ),
+          const SizedBox(width: 16),
+          sideButton(
+            tooltip: 'Next',
+            onPressed: player.hasNext ? () => player.seekToNext() : null,
+            icon: Icons.skip_next_rounded,
+          ),
+          const SizedBox(width: 12),
+          StreamBuilder<LoopMode>(
+            stream: player.loopModeStream,
+            initialData: player.loopMode,
+            builder: (context, snapshot) {
+              final loopMode = snapshot.data ?? LoopMode.off;
+              final icon = switch (loopMode) {
+                LoopMode.off => Icons.repeat_rounded,
+                LoopMode.all => Icons.repeat_rounded,
+                LoopMode.one => Icons.repeat_one_rounded,
+              };
+              return sideButton(
+                tooltip: switch (loopMode) {
+                  LoopMode.off => 'Repeat off',
+                  LoopMode.all => 'Repeat all',
+                  LoopMode.one => 'Repeat one',
+                },
+                isActive: loopMode != LoopMode.off,
+                onPressed: () async {
+                  final next = switch (player.loopMode) {
+                    LoopMode.off => LoopMode.all,
+                    LoopMode.all => LoopMode.one,
+                    LoopMode.one => LoopMode.off,
+                  };
+                  await player.setLoopMode(next);
+                },
+                icon: icon,
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
