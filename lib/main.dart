@@ -4474,46 +4474,20 @@ void _recomputeAllData() {
 
     _nowPlayingRouteActive = true;
     try {
-      await Navigator.of(context).push(
-        PageRouteBuilder(
-          opaque: false,
-          barrierDismissible: false,
-          barrierColor: Colors.transparent,
-          barrierLabel: 'Now Playing',
-          pageBuilder: (_, __, ___) => NowPlayingPage(
-            player: _controller.player,
-            song: song,
-            songs: _songs,
-            playlist: _controller.currentPlaylist,
-            onQueueChanged: (_) {},
-            onOpenAlbum: _openAlbumPageFromSong,
-            onOpenArtist: _openArtistPageFromSong,
-            onSongUpdated: _updateSongMetadataInPlace,
-          ),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            final fade = CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            );
-            final slide = Tween(
-              begin: const Offset(0.0, 0.08),
-              end: Offset.zero,
-            ).chain(CurveTween(curve: Curves.easeOutCubic));
-            final scale = Tween<double>(
-              begin: 0.985,
-              end: 1.0,
-            ).chain(CurveTween(curve: Curves.easeOutCubic));
-            return FadeTransition(
-              opacity: fade,
-              child: SlideTransition(
-                position: animation.drive(slide),
-                child: ScaleTransition(
-                  scale: animation.drive(scale),
-                  child: child,
-                ),
-              ),
-            );
-          },
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: false,
+        backgroundColor: Colors.transparent,
+        builder: (context) => NowPlayingPage(
+          player: _controller.player,
+          song: song,
+          songs: _songs,
+          playlist: _controller.currentPlaylist,
+          onQueueChanged: (_) {},
+          onOpenAlbum: _openAlbumPageFromSong,
+          onOpenArtist: _openArtistPageFromSong,
+          onSongUpdated: _updateSongMetadataInPlace,
         ),
       );
     } finally {
