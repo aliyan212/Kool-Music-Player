@@ -154,8 +154,6 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       }
     });
 
-    // Start/stop controllers based on current state.
-    _syncMotionControllers();
     if (widget.player.playing && appIsForeground.value && !_disableMotion) {
       _artworkPulseController.repeat(reverse: true);
     }
