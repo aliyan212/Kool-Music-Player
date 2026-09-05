@@ -1261,7 +1261,16 @@ class _NowPlayingPageState extends State<NowPlayingPage>
         },
         child: Column(
           children: [
-            SizedBox(height: MediaQuery.of(context).viewPadding.top),
+            SizedBox(
+              height: MediaQuery.of(context).viewPadding.top > 0
+                  ? MediaQuery.of(context).viewPadding.top
+                  : (MediaQueryData.fromView(View.of(context)).viewPadding.top >
+                            0
+                        ? MediaQueryData.fromView(
+                            View.of(context),
+                          ).viewPadding.top
+                        : 42.0), // Safe fallback for S10+ and similar devices
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
