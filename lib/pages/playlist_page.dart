@@ -55,7 +55,9 @@ import '../utils/song_sort_utils.dart';
 import '../dialogs/folder_management_dialog.dart';
 import '../main.dart';
 
+enum PlaylistSort { manual, artist, albumArtist, year, albumArtistYear }
 class SmartPlaylistPage extends StatelessWidget {
+
   const SmartPlaylistPage({
     required this.player,
     required this.title,
@@ -412,7 +414,7 @@ class UserPlaylistPage extends StatefulWidget {
 class UserPlaylistPageState extends State<UserPlaylistPage> {
   late List<int> _songIds;
   late List<int> _manualSongIds;
-  _PlaylistSort _playlistSort = _PlaylistSort.manual;
+  PlaylistSort _playlistSort = PlaylistSort.manual;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _isSearching = false;
@@ -449,17 +451,17 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
       final secondaryColorInt = result['secondary'] ?? primaryColorInt;
       final tertiaryColorInt = result['tertiary'] ?? secondaryColorInt;
 
-      final primary = _boostVibrance(
+      final primary = boostVibrance(
         Color(primaryColorInt),
         extraSaturation: 0.5,
         extraLightness: 0.08,
       );
-      final secondary = _boostVibrance(
+      final secondary = boostVibrance(
         Color(secondaryColorInt),
         extraSaturation: 0.42,
         extraLightness: -0.02,
       );
-      final tertiary = _boostVibrance(
+      final tertiary = boostVibrance(
         Color(tertiaryColorInt),
         extraSaturation: 0.46,
         extraLightness: 0.03,
@@ -572,7 +574,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
       if (_selectedSongIds.isEmpty) _selectionMode = false;
     });
 
-    if (_playlistSort == _PlaylistSort.manual) {
+    if (_playlistSort == PlaylistSort.manual) {
       await _persistSongIds();
     } else {
       await _applyPlaylistSort(_playlistSort);
@@ -715,17 +717,17 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
     );
   }
 
-  String _playlistSortLabel(_PlaylistSort mode) {
+  String _playlistSortLabel(PlaylistSort mode) {
     switch (mode) {
-      case _PlaylistSort.manual:
+      case PlaylistSort.manual:
         return 'Manual';
-      case _PlaylistSort.artist:
+      case PlaylistSort.artist:
         return 'Artist';
-      case _PlaylistSort.albumArtist:
+      case PlaylistSort.albumArtist:
         return 'Album Artist';
-      case _PlaylistSort.year:
+      case PlaylistSort.year:
         return 'Year';
-      case _PlaylistSort.albumArtistYear:
+      case PlaylistSort.albumArtistYear:
         return 'Album Artist/Year';
     }
   }
@@ -744,11 +746,11 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
 
 
 
-  Future<void> _applyPlaylistSort(_PlaylistSort mode) async {
+  Future<void> _applyPlaylistSort(PlaylistSort mode) async {
     if (!mounted) return;
     final map = _idToSong();
 
-    if (mode == _PlaylistSort.manual) {
+    if (mode == PlaylistSort.manual) {
       setState(() {
         _playlistSort = mode;
         _songIds = List<int>.from(_manualSongIds);
@@ -782,7 +784,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
     final sorted = List<SongModel>.from(visible);
     sorted.sort((a, b) {
       switch (mode) {
-        case _PlaylistSort.artist:
+        case PlaylistSort.artist:
           final artistComp = compareSortStrings(
             a.artist ?? "",
             b.artist ?? "",
@@ -791,7 +793,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
           final titleComp = compareSortStrings(a.title, b.title);
           if (titleComp != 0) return titleComp;
           return a.id.compareTo(b.id);
-        case _PlaylistSort.albumArtist:
+        case PlaylistSort.albumArtist:
           final artistComp = compareSortStrings(
             albumArtistFor(a),
             albumArtistFor(b),
@@ -804,7 +806,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
           final titleComp = compareSortStrings(a.title, b.title);
           if (titleComp != 0) return titleComp;
           return a.id.compareTo(b.id);
-        case _PlaylistSort.year:
+        case PlaylistSort.year:
           final yearComp = albumYear(a).compareTo(albumYear(b));
           if (yearComp != 0) return yearComp;
           final artistComp = compareSortStrings(
@@ -819,7 +821,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
           final titleComp = compareSortStrings(a.title, b.title);
           if (titleComp != 0) return titleComp;
           return a.id.compareTo(b.id);
-        case _PlaylistSort.albumArtistYear:
+        case PlaylistSort.albumArtistYear:
         default:
           final artistComp = compareSortStrings(
             albumArtistFor(a),
@@ -867,7 +869,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
     setState(() {
       _songIds = <int>[...visible, ...missing];
       _manualSongIds = List<int>.from(_songIds);
-      _playlistSort = _PlaylistSort.manual;
+      _playlistSort = PlaylistSort.manual;
     });
     unawaited(_persistSongIds());
   }
@@ -1063,7 +1065,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
       _songIds = <int>[..._songIds, ...added];
       _manualSongIds = <int>[..._manualSongIds, ...added];
     });
-    if (_playlistSort == _PlaylistSort.manual) {
+    if (_playlistSort == PlaylistSort.manual) {
       await _persistSongIds();
     } else {
       await _applyPlaylistSort(_playlistSort);
@@ -1109,7 +1111,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
     final subtitle =
         '${allSongs.length} tracks • ${formatPlaylistDuration(totalMs)}';
     final canReorder =
-        _playlistSort == _PlaylistSort.manual &&
+        _playlistSort == PlaylistSort.manual &&
         query.isEmpty &&
         !_selectionMode &&
         !_isSearching;
@@ -1270,9 +1272,9 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                             _exportPlaylistM3u(allSongs);
                           } else if (val.startsWith('sort_')) {
                             final sortName = val.substring(5);
-                            final sortType = _PlaylistSort.values.firstWhere(
+                            final sortType = PlaylistSort.values.firstWhere(
                               (e) => e.name == sortName,
-                              orElse: () => _PlaylistSort.manual,
+                              orElse: () => PlaylistSort.manual,
                             );
                             _applyPlaylistSort(sortType);
                           }
@@ -1306,10 +1308,10 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                             child: Row(
                               children: [
                                 Icon(
-                                  _playlistSort == _PlaylistSort.manual
+                                  _playlistSort == PlaylistSort.manual
                                       ? Icons.check_rounded
                                       : Icons.drag_indicator_rounded,
-                                  color: _playlistSort == _PlaylistSort.manual
+                                  color: _playlistSort == PlaylistSort.manual
                                       ? cs.primary
                                       : cs.onSurfaceVariant,
                                   size: 18,
@@ -1324,10 +1326,10 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                             child: Row(
                               children: [
                                 Icon(
-                                  _playlistSort == _PlaylistSort.artist
+                                  _playlistSort == PlaylistSort.artist
                                       ? Icons.check_rounded
                                       : Icons.person_outline_rounded,
-                                  color: _playlistSort == _PlaylistSort.artist
+                                  color: _playlistSort == PlaylistSort.artist
                                       ? cs.primary
                                       : cs.onSurfaceVariant,
                                   size: 18,
@@ -1342,10 +1344,10 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                             child: Row(
                               children: [
                                 Icon(
-                                  _playlistSort == _PlaylistSort.albumArtist
+                                  _playlistSort == PlaylistSort.albumArtist
                                       ? Icons.check_rounded
                                       : Icons.album_outlined,
-                                  color: _playlistSort == _PlaylistSort.albumArtist
+                                  color: _playlistSort == PlaylistSort.albumArtist
                                       ? cs.primary
                                       : cs.onSurfaceVariant,
                                   size: 18,
@@ -1360,10 +1362,10 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                             child: Row(
                               children: [
                                 Icon(
-                                  _playlistSort == _PlaylistSort.year
+                                  _playlistSort == PlaylistSort.year
                                       ? Icons.check_rounded
                                       : Icons.calendar_today_rounded,
-                                  color: _playlistSort == _PlaylistSort.year
+                                  color: _playlistSort == PlaylistSort.year
                                       ? cs.primary
                                       : cs.onSurfaceVariant,
                                   size: 18,
@@ -1378,10 +1380,10 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                             child: Row(
                               children: [
                                 Icon(
-                                  _playlistSort == _PlaylistSort.albumArtistYear
+                                  _playlistSort == PlaylistSort.albumArtistYear
                                       ? Icons.check_rounded
                                       : Icons.auto_awesome_rounded,
-                                  color: _playlistSort == _PlaylistSort.albumArtistYear
+                                  color: _playlistSort == PlaylistSort.albumArtistYear
                                       ? cs.primary
                                       : cs.onSurfaceVariant,
                                   size: 18,
@@ -1504,7 +1506,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    if (_playlistSort != _PlaylistSort.manual) ...[
+                                    if (_playlistSort != PlaylistSort.manual) ...[
                                       const SizedBox(height: 8),
                                       Container(
                                         padding: const EdgeInsets.symmetric(

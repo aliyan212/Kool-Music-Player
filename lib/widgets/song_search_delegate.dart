@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
-import '../main.dart';
+import '../utils/format_utils.dart';
 import '../ui/shared/fast_artwork_widget.dart';
 
 

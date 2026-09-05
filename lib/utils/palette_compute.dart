@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'dart:isolate';
 import 'dart:ui' as ui;
@@ -148,3 +149,30 @@ Future<Map<String, int>> computePaletteFromBytes(Uint8List bytes) async {
 	}
 }
 
+
+
+Color boostVibrance(
+  Color color, {
+  double extraSaturation = 0.2,
+  double extraLightness = 0.0,
+}) {
+  final hsl = HSLColor.fromColor(color);
+  final sat = (hsl.saturation + extraSaturation).clamp(0.0, 1.0);
+  final light = (hsl.lightness + extraLightness).clamp(0.0, 1.0);
+  return hsl.withSaturation(sat).withLightness(light).toColor();
+}
+
+Color harmonizeBackgroundAccent(
+  Color color,
+  Color surface, {
+  required bool isDark,
+}) {
+  final blended = Color.lerp(color, surface, isDark ? 0.42 : 0.52) ?? color;
+  final hsl = HSLColor.fromColor(blended);
+  final sat = hsl.saturation.clamp(0.08, isDark ? 0.42 : 0.38);
+  final light = hsl.lightness.clamp(
+    isDark ? 0.20 : 0.66,
+    isDark ? 0.44 : 0.90,
+  );
+  return hsl.withSaturation(sat).withLightness(light).toColor();
+}

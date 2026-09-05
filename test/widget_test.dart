@@ -9,16 +9,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 import 'package:music_player/main.dart' as app;
+import 'package:music_player/utils/format_utils.dart';
 
 void main() {
   test('formatTime formats mm:ss', () {
-    expect(app.formatTime(null), '0:00');
-    expect(app.formatTime(-1), '0:00');
-    expect(app.formatTime(0), '0:00');
-    expect(app.formatTime(999), '0:00');
-    expect(app.formatTime(1_000), '0:01');
-    expect(app.formatTime(61_000), '1:01');
-    expect(app.formatTime(600_000), '10:00');
+    expect(formatTime(null), '0:00');
+    expect(formatTime(-1), '0:00');
+    expect(formatTime(0), '0:00');
+    expect(formatTime(999), '0:00');
+    expect(formatTime(1_000), '0:01');
+    expect(formatTime(61_000), '1:01');
+    expect(formatTime(600_000), '10:00');
   });
 
   test('repairSongMetadataMap fills blank values from real tags and display names', () {

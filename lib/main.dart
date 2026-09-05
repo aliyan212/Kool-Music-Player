@@ -42,6 +42,9 @@ import 'services/local_audio_scanner.dart';
 import 'data/services/caching_service.dart';
 import 'utils/file_ops.dart';
 import 'utils/palette_compute.dart';
+import "dialogs/folder_management_dialog.dart";
+import "utils/song_sort_utils.dart";
+import "utils/format_utils.dart";
 import 'ui/shared/fast_artwork_widget.dart';
 import 'ui/shared/frosted_card.dart';
 import 'ui/shared/squiggly_seek_bar.dart';
@@ -487,32 +490,6 @@ Future<List<SongModel>> repairSongMetadataList(
 
 
 
-Color _boostVibrance(
-  Color color, {
-  double extraSaturation = 0.2,
-  double extraLightness = 0.0,
-}) {
-  final hsl = HSLColor.fromColor(color);
-  final sat = (hsl.saturation + extraSaturation).clamp(0.0, 1.0);
-  final light = (hsl.lightness + extraLightness).clamp(0.0, 1.0);
-  return hsl.withSaturation(sat).withLightness(light).toColor();
-}
-
-Color _harmonizeBackgroundAccent(
-  Color color,
-  Color surface, {
-  required bool isDark,
-}) {
-  final blended = Color.lerp(color, surface, isDark ? 0.42 : 0.52) ?? color;
-  final hsl = HSLColor.fromColor(blended);
-  final sat = hsl.saturation.clamp(0.08, isDark ? 0.42 : 0.38);
-  final light = hsl.lightness.clamp(
-    isDark ? 0.20 : 0.66,
-    isDark ? 0.44 : 0.90,
-  );
-  return hsl.withSaturation(sat).withLightness(light).toColor();
-}
-
 Widget buildDetailBottomBars({
   required BuildContext context,
   required AudioPlayer player,
@@ -724,7 +701,6 @@ class MyHomePage extends StatefulWidget {
 
 
 
-enum _PlaylistSort { manual, artist, albumArtist, year, albumArtistYear }
 
 enum _PlaylistSongAction { remove }
 
@@ -1281,6 +1257,52 @@ void _recomputeAllData() {
     }
   }
 
+  Future<UserPlaylist?> _createNewPlaylist(String name) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final playlist = UserPlaylist(
+      id: _newPlaylistId(),
+      name: name,
+      songIds: const <int>[],
+      createdAtMs: now,
+      updatedAtMs: now,
+    );
+    setState(() {
+      _userPlaylists.insert(0, playlist);
+      _cachedUserPlaylistTrackCounts[playlist.id] = 0;
+    });
+    await _saveUserPlaylists();
+    return playlist;
+  }
+
+  Future<void> _renamePlaylist(UserPlaylist playlist, String newName) async {
+    final idx = _userPlaylists.indexWhere((p) => p.id == playlist.id);
+    if (idx == -1) return;
+    setState(() {
+      _userPlaylists[idx] = playlist.copyWith(
+        name: newName,
+        updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+      );
+    });
+    await _saveUserPlaylists();
+  }
+
+  Future<void> _deletePlaylist(UserPlaylist playlist) async {
+    setState(() {
+      _userPlaylists.removeWhere((p) => p.id == playlist.id);
+      _cachedUserPlaylistTrackCounts.remove(playlist.id);
+    });
+    await _saveUserPlaylists();
+  }
+
+  String _normalizeFolderPath(String path) {
+    return path.trim().replaceAll(RegExp(r'/+$'), '');
+  }
+
+  int _compareStrings(String a, String b) {
+    return a.compareTo(b);
+  }
+
+
   String _basename(String path) {
     var p = path.trim();
     if (p.startsWith('file://')) {
@@ -1465,9 +1487,6 @@ void _recomputeAllData() {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Failed to import playlist'),
-import 'utils/format_utils.dart';
-import 'utils/song_sort_utils.dart';
-import 'dialogs/folder_management_dialog.dart';
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2303,8 +2322,6 @@ import 'dialogs/folder_management_dialog.dart';
     }
   }
 
-    return _androidCommonFolders;
-  }
 
 
 
@@ -2457,33 +2474,33 @@ import 'dialogs/folder_management_dialog.dart';
   Widget _wrapWithAuroraBackground({required Widget child}) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final rawPrimary = _boostVibrance(
+    final rawPrimary = boostVibrance(
       cs.primaryContainer,
       extraSaturation: 0.08,
       extraLightness: isDark ? -0.04 : 0.04,
     );
-    final rawSecondary = _boostVibrance(
+    final rawSecondary = boostVibrance(
       cs.tertiaryContainer,
       extraSaturation: 0.10,
       extraLightness: isDark ? -0.03 : 0.03,
     );
-    final rawAccent = _boostVibrance(
+    final rawAccent = boostVibrance(
       cs.secondaryContainer,
       extraSaturation: 0.10,
       extraLightness: isDark ? -0.03 : 0.03,
     );
 
-    final primary = _harmonizeBackgroundAccent(
+    final primary = harmonizeBackgroundAccent(
       rawPrimary,
       cs.surface,
       isDark: isDark,
     );
-    final secondary = _harmonizeBackgroundAccent(
+    final secondary = harmonizeBackgroundAccent(
       rawSecondary,
       cs.surface,
       isDark: isDark,
     );
-    final accent = _harmonizeBackgroundAccent(
+    final accent = harmonizeBackgroundAccent(
       rawAccent,
       cs.surface,
       isDark: isDark,
@@ -4531,7 +4548,7 @@ import 'dialogs/folder_management_dialog.dart';
     // name, even if MediaStore assigned different album IDs (e.g. guest features).
     final targetKey = albumIdentityKey(song);
     final albumSongs = _songs.where((s) => albumIdentityKey(s) == targetKey).toList();
-    albumSongs.sort(_compareDiscAndTrack);
+    albumSongs.sort(compareDiscAndTrack);
 
     _showInlineDetail(
       AlbumPage(
@@ -4607,7 +4624,7 @@ import 'dialogs/folder_management_dialog.dart';
     final albums = <ArtistAlbum>[];
     for (final entry in songsByAlbumKey.entries) {
       final songs = entry.value;
-      songs.sort(_compareDiscAndTrack);
+      songs.sort(compareDiscAndTrack);
 
       final title = (songs.first.album ?? '').trim().isEmpty
           ? 'Unknown Album'
@@ -4688,7 +4705,7 @@ import 'dialogs/folder_management_dialog.dart';
                   final key = albumKeyForAlbum[a.albumId] ?? '';
                   final list = songsByAlbumKey[key] ?? const <SongModel>[];
                   final sorted = List<SongModel>.from(list);
-                  sorted.sort(_compareDiscAndTrack);
+                  sorted.sort(compareDiscAndTrack);
                   queue.addAll(sorted);
                 }
                 if (queue.isEmpty) return;

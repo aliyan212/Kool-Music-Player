@@ -132,17 +132,17 @@ class AlbumPage extends StatefulWidget {
       final secondaryColorInt = result['secondary'] ?? primaryColorInt;
       final tertiaryColorInt = result['tertiary'] ?? secondaryColorInt;
 
-      final primary = _boostVibrance(
+      final primary = boostVibrance(
         Color(primaryColorInt),
         extraSaturation: 0.18,
         extraLightness: 0.04,
       );
-      final secondary = _boostVibrance(
+      final secondary = boostVibrance(
         Color(secondaryColorInt),
         extraSaturation: 0.14,
         extraLightness: -0.02,
       );
-      final tertiary = _boostVibrance(
+      final tertiary = boostVibrance(
         Color(tertiaryColorInt),
         extraSaturation: 0.14,
         extraLightness: 0.02,

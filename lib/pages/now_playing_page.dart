@@ -690,17 +690,17 @@ class _NowPlayingPageState extends State<NowPlayingPage>
         final primaryColorInt = result['primary'] ?? 0xFF000000;
         final secondaryColorInt = result['secondary'] ?? primaryColorInt;
         final tertiaryColorInt = result['tertiary'] ?? secondaryColorInt;
-        final primary = _boostVibrance(
+        final primary = boostVibrance(
           Color(primaryColorInt),
           extraSaturation: 0.5,
           extraLightness: 0.08,
         );
-        final secondary = _boostVibrance(
+        final secondary = boostVibrance(
           Color(secondaryColorInt),
           extraSaturation: 0.42,
           extraLightness: -0.02,
         );
-        final tertiary = _boostVibrance(
+        final tertiary = boostVibrance(
           Color(tertiaryColorInt),
           extraSaturation: 0.46,
           extraLightness: 0.03,
@@ -2127,3 +2127,4 @@ class _LyricLineTileState extends State<_LyricLineTile> {
   }
 }
 
+enum _LyricTileMode { active, near, normal }
