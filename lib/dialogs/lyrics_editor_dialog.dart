@@ -1,6 +1,4 @@
 
-import 'package:audiotags/audiotags.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -171,8 +169,8 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
     final textColor = isDark ? Colors.white : Colors.black87;
     final textColorSecondary = isDark ? Colors.white70 : Colors.black54;
     final fillColor = isDark
-        ? Colors.white.withOpacity(0.06)
-        : Colors.black.withOpacity(0.04);
+        ? Colors.white.withValues(alpha: 0.06)
+        : Colors.black.withValues(alpha: 0.04);
 
     final result = await showDialog<double>(
       context: context,
@@ -247,9 +245,9 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
     final subHeaderBgColor = cs.surfaceContainerLow;
     final textColor = cs.onSurface;
     final textColorSecondary = cs.onSurfaceVariant;
-    final textColorTertiary = cs.onSurfaceVariant.withOpacity(0.72);
+    final textColorTertiary = cs.onSurfaceVariant.withValues(alpha: 0.72);
     final textAreaBg = cs.surfaceContainerLow;
-    final textAreaBorder = cs.outlineVariant.withOpacity(0.45);
+    final textAreaBorder = cs.outlineVariant.withValues(alpha: 0.45);
 
     return Dialog.fullscreen(
       backgroundColor: bgColor,
@@ -401,7 +399,7 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
                       hintText:
                           'Enter lyrics here...\n\nFor synced lyrics, use LRC format:\n[00:12.345]First line\n[00:15.678]Second line',
                       hintStyle: TextStyle(
-                        color: textColorTertiary.withOpacity(0.5),
+                        color: textColorTertiary.withValues(alpha: 0.5),
                       ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.all(16),

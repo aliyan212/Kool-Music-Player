@@ -56,7 +56,7 @@ Widget _buildFolderTab(
           Icon(
             isIncluded ? Icons.folder_open : Icons.folder_off,
             size: 48,
-            color: cs.onSurfaceVariant.withOpacity(0.5),
+            color: cs.onSurfaceVariant.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
           Text(
@@ -122,7 +122,7 @@ void showManageFoldersDialog({
 }) {
   final included = Set<String>.from(initialIncluded);
   final excluded = Set<String>.from(initialExcluded);
-  int _activeTab = 0;
+  int activeTab = 0;
 
   showModalBottomSheet(
     context: context,
@@ -140,7 +140,7 @@ void showManageFoldersDialog({
                 child: Column(
                   children: [
                     TabBar(
-                      onTap: (i) => _activeTab = i,
+                      onTap: (i) => activeTab = i,
                       labelColor: cs.primary,
                       unselectedLabelColor: cs.onSurfaceVariant,
                       tabs: const [
@@ -171,7 +171,7 @@ void showManageFoldersDialog({
                             ),
                             onPressed: () {
                               setModalState(() {
-                                if (_activeTab == 0) {
+                                if (activeTab == 0) {
                                   included.add(folder);
                                 } else {
                                   excluded.add(folder);
@@ -195,7 +195,7 @@ void showManageFoldersDialog({
                                 if (folder == null) return;
                                 final normalized = _normalizeFolderPath(folder);
                                 setModalState(() {
-                                  if (_activeTab == 0) {
+                                  if (activeTab == 0) {
                                     included.add(normalized);
                                   } else {
                                     excluded.add(normalized);

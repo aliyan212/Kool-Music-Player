@@ -103,7 +103,7 @@ ThemeData buildTheme(ColorScheme scheme, Brightness brightness) {
         height: 72,
         backgroundColor: Colors.transparent,
         // Tone down indicator to be subtler
-        indicatorColor: scheme.primaryContainer.withOpacity(0.14),
+        indicatorColor: scheme.primaryContainer.withValues(alpha: 0.14),
         // Use a smaller label and soften unselected color; selected label slightly bolder
         labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>((states) {
           final selected = states.contains(WidgetState.selected);
@@ -154,7 +154,7 @@ ThemeData buildTheme(ColorScheme scheme, Brightness brightness) {
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        dividerColor: scheme.outlineVariant.withOpacity(0.35),
+        dividerColor: scheme.outlineVariant.withValues(alpha: 0.35),
       ),
       cardTheme: CardThemeData(
         color: scheme.surfaceContainerLow,
@@ -162,7 +162,7 @@ ThemeData buildTheme(ColorScheme scheme, Brightness brightness) {
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: scheme.outlineVariant.withOpacity(0.35)),
+          side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.35)),
         ),
       ),
       dialogTheme: DialogThemeData(
@@ -199,11 +199,11 @@ ThemeData buildTheme(ColorScheme scheme, Brightness brightness) {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(0.5)),
+          borderSide: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(0.35)),
+          borderSide: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.35)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -225,7 +225,7 @@ ThemeData buildTheme(ColorScheme scheme, Brightness brightness) {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          side: BorderSide(color: scheme.outlineVariant.withOpacity(0.7)),
+          side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.7)),
           textStyle: labelMedium,
         ),
       ),
@@ -235,7 +235,7 @@ ThemeData buildTheme(ColorScheme scheme, Brightness brightness) {
       chipTheme: ChipThemeData(
         labelStyle: labelMedium?.copyWith(color: scheme.onSecondaryContainer),
         backgroundColor: scheme.secondaryContainer,
-        side: BorderSide(color: scheme.outlineVariant.withOpacity(0.35)),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.35)),
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       ),

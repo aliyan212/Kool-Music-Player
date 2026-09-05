@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -186,7 +185,7 @@ class PlaybackController {
     final idx = _player.currentIndex;
     if (idx == null) return null;
     final seq = _player.sequence;
-    if (seq == null || seq.isEmpty) return null;
+    if (seq.isEmpty) return null;
     if (idx < 0 || idx >= seq.length) return null;
     return songIdFromTag(seq[idx].tag);
   }
@@ -198,7 +197,7 @@ class PlaybackController {
       return;
     }
     final seq = _player.sequence;
-    if (seq == null || seq.isEmpty) return;
+    if (seq.isEmpty) return;
     if (playerIndex < 0 || playerIndex >= seq.length) return;
 
     final songId = songIdFromTag(seq[playerIndex].tag);
@@ -611,7 +610,9 @@ class PlaybackController {
     final lower = t.toLowerCase();
     if (lower == 'unknown' ||
         lower == 'unknown artist' ||
-        lower == 'unknown album') return '';
+        lower == 'unknown album') {
+      return '';
+    }
     return t;
   }
 

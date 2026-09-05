@@ -20,19 +20,19 @@ class NowPlayingTransport extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final sideButtonBg = isDark ? Colors.white10 : Colors.black.withOpacity(0.08);
+    final sideButtonBg = isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.08);
     final accent = accentColor ?? scheme.primary;
     final activeSideBg = Color.alphaBlend(
-      accent.withOpacity(isDark ? 0.38 : 0.24),
+      accent.withValues(alpha: isDark ? 0.38 : 0.24),
       sideButtonBg,
     );
     final activeSideFg = isDark ? Colors.white : scheme.onPrimary;
     final mainButtonBg = Color.alphaBlend(
-      (isDark ? Colors.white : Colors.black).withOpacity(isDark ? 0.2 : 0.06),
+      (isDark ? Colors.white : Colors.black).withValues(alpha: isDark ? 0.2 : 0.06),
       accent,
     );
-    final sideShadow = (isDark ? Colors.black : scheme.primary).withOpacity(0.2);
-    final mainShadow = accent.withOpacity(isDark ? 0.42 : 0.28);
+    final sideShadow = (isDark ? Colors.black : scheme.primary).withValues(alpha: 0.2);
+    final mainShadow = accent.withValues(alpha: isDark ? 0.42 : 0.28);
 
     Widget sideButton({
       required VoidCallback? onPressed,
@@ -61,7 +61,7 @@ class NowPlayingTransport extends StatelessWidget {
                   Icon(
                     icon,
                     size: 28,
-                    color: fg.withOpacity(onPressed == null ? 0.4 : 1),
+                    color: fg.withValues(alpha: onPressed == null ? 0.4 : 1),
                   ),
                   if (isActive)
                     Positioned(

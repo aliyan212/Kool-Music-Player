@@ -122,8 +122,9 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> _recoverFromStuckMuteIfNeeded() async {
     final now = DateTime.now();
     final last = _lastMuteRecoveryAt;
-    if (last != null && now.difference(last) < const Duration(seconds: 5))
+    if (last != null && now.difference(last) < const Duration(seconds: 5)) {
       return;
+    }
     _lastMuteRecoveryAt = now;
 
     try {

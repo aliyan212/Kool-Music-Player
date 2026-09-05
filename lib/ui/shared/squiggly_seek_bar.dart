@@ -235,7 +235,7 @@ class SquigglePainter extends CustomPainter {
 
       final glowPaint = Paint()
         ..shader = RadialGradient(
-          colors: [color.withOpacity(0.5), color.withOpacity(0.0)],
+          colors: [color.withValues(alpha: 0.5), color.withValues(alpha: 0.0)],
         ).createShader(Rect.fromCircle(center: Offset(thumbX, thumbY), radius: 16));
       canvas.drawCircle(Offset(thumbX, thumbY), 16, glowPaint);
 

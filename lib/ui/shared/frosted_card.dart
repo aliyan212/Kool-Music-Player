@@ -19,7 +19,7 @@ class FrostedCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
             color: (isDark ? const Color(0xFF1A1A1A) : Colors.white)
-                .withOpacity(isDark ? 0.55 : 0.72),
+                .withValues(alpha: isDark ? 0.55 : 0.72),
             border: Border.all(color: border),
           ),
           child: child,

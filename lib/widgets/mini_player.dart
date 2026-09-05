@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:audio_service/audio_service.dart';
@@ -379,7 +378,7 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.10 : 0.06),
+              color: Colors.black.withValues(alpha: isDark ? 0.10 : 0.06),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -395,8 +394,8 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    bgColor.withOpacity(0.40),
-                    bgColor.withOpacity(0.28),
+                    bgColor.withValues(alpha: 0.40),
+                    bgColor.withValues(alpha: 0.28),
                   ],
                 ),
               ),
@@ -429,7 +428,7 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
                                 return LinearProgressIndicator(
                                   value: value,
                                   minHeight: 3,
-                                  color: textColor.withOpacity(0.9),
+                                  color: textColor.withValues(alpha: 0.9),
                                   backgroundColor: Colors.transparent,
                                 );
                               },
@@ -471,7 +470,7 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
                                         borderRadius: BorderRadius.circular(14),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black.withOpacity(0.3),
+                                            color: Colors.black.withValues(alpha: 0.3),
                                             blurRadius: 8,
                                             offset: const Offset(0, 2),
                                           ),

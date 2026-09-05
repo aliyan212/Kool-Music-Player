@@ -1,64 +1,24 @@
-import '../data/models/album_stat.dart';
-import '../data/models/sort_mode.dart';
-import '../data/models/isolate_data.dart';
-import '../data/models/user_playlist.dart';
 import 'dart:async';
-import 'dart:collection';
-import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_media_kit/just_audio_media_kit.dart';
-import 'package:palette_generator/palette_generator.dart';
-import 'dart:typed_data';
-import 'dart:ffi';
-import 'package:ffi/ffi.dart';
-import 'package:audiotags/audiotags.dart';
 import 'dart:math' as math;
-import 'package:audio_service/audio_service.dart';
-import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:flutter/rendering.dart';
-import '../core/theme/app_theme.dart';
-import '../widgets/song_options_sheet.dart';
-import '../app_audio_handler.dart';
-import '../android_notifications.dart';
-import '../platform_exit.dart';
-import '../services/app_local_store.dart';
 import '../services/playback_controller.dart';
-import '../services/local_audio_scanner.dart';
-import '../data/services/caching_service.dart';
 import '../utils/file_ops.dart';
 import '../utils/palette_compute.dart';
 import '../ui/shared/fast_artwork_widget.dart';
-import '../ui/shared/frosted_card.dart';
-import '../ui/shared/squiggly_seek_bar.dart';
-import '../widgets/now_playing_transport.dart';
-import '../dialogs/lyrics_editor_dialog.dart';
-import '../dialogs/playlist_dialogs.dart';
-import '../dialogs/tag_editor_dialog.dart';
-import '../pages/queue_page.dart';
-import '../utils/lyrics.dart';
-import '../utils/tag_write_access.dart';
-import '../widgets/mini_player.dart';
-import '../widgets/song_search_delegate.dart';
 import '../utils/format_utils.dart';
 import '../utils/song_sort_utils.dart';
-import '../dialogs/folder_management_dialog.dart';
 import '../main.dart';
 
 enum PlaylistSort { manual, artist, albumArtist, year, albumArtistYear }
 class SmartPlaylistPage extends StatelessWidget {
 
-  const SmartPlaylistPage({
+  const SmartPlaylistPage({super.key, 
     required this.player,
     required this.title,
     required this.description,
@@ -137,7 +97,7 @@ class SmartPlaylistPage extends StatelessWidget {
                   color: cs.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(
-                    color: cs.outlineVariant.withOpacity(0.35),
+                    color: cs.outlineVariant.withValues(alpha: 0.35),
                   ),
                 ),
                 child: Padding(
@@ -186,12 +146,12 @@ class SmartPlaylistPage extends StatelessWidget {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: cs.secondaryContainer.withOpacity(
+                                color: cs.secondaryContainer.withValues(alpha: 
                                   isDark ? 0.25 : 0.55,
                                 ),
                                 borderRadius: BorderRadius.circular(999),
                                 border: Border.all(
-                                  color: cs.outlineVariant.withOpacity(0.35),
+                                  color: cs.outlineVariant.withValues(alpha: 0.35),
                                 ),
                               ),
                               child: Text(
@@ -200,7 +160,7 @@ class SmartPlaylistPage extends StatelessWidget {
                                     ?.copyWith(
                                       fontWeight: FontWeight.w700,
                                       color: cs.onSecondaryContainer
-                                          .withOpacity(0.92),
+                                          .withValues(alpha: 0.92),
                                     ),
                               ),
                             ),
@@ -238,7 +198,7 @@ class SmartPlaylistPage extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                         side: BorderSide(
-                          color: cs.outlineVariant.withOpacity(0.35),
+                          color: cs.outlineVariant.withValues(alpha: 0.35),
                         ),
                       ),
                     ),
@@ -316,7 +276,7 @@ class SmartPlaylistPage extends StatelessWidget {
                                           .bodySmall
                                           ?.copyWith(
                                             color: cs.onSurfaceVariant
-                                                .withOpacity(0.75),
+                                                .withValues(alpha: 0.75),
                                             fontWeight: FontWeight.w600,
                                           ),
                                     ),
@@ -373,7 +333,7 @@ class SmartPlaylistPage extends StatelessWidget {
 }
 
 class UserPlaylistPage extends StatefulWidget {
-  const UserPlaylistPage({
+  const UserPlaylistPage({super.key, 
     required this.player,
     required this.playlistId,
     required this.playlistName,
@@ -651,7 +611,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
     for (final s in songs) {
       final seconds = ((s.duration ?? 0) / 1000).round();
       final artist = (s.artist ?? '').trim();
-      final info = artist.isEmpty ? s.title : '${artist} - ${s.title}';
+      final info = artist.isEmpty ? s.title : '$artist - ${s.title}';
       lines.add('#EXTINF:$seconds,$info');
       lines.add(s.data);
     }
@@ -692,17 +652,17 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
     final base = _sanitizeFileName(widget.playlistName);
     final sep = dir.contains('\\') ? '\\' : '/';
     final basePath = dir.endsWith(sep) ? dir : '$dir$sep';
-    var path = '${basePath}${base}.m3u';
+    var path = '$basePath$base.m3u';
     if (await fileExists(path)) {
       final stamp = DateTime.now().millisecondsSinceEpoch;
-      path = '${basePath}${base}_$stamp.m3u';
+      path = '$basePath${base}_$stamp.m3u';
     }
 
     final lines = <String>['#EXTM3U'];
     for (final s in songs) {
       final seconds = ((s.duration ?? 0) / 1000).round();
       final artist = (s.artist ?? '').trim();
-      final info = artist.isEmpty ? s.title : '${artist} - ${s.title}';
+      final info = artist.isEmpty ? s.title : '$artist - ${s.title}';
       lines.add('#EXTINF:$seconds,$info');
       lines.add(s.data);
     }
@@ -911,14 +871,14 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: cs.secondaryContainer.withOpacity(
+                              color: cs.secondaryContainer.withValues(alpha: 
                                 Theme.of(ctx).brightness == Brightness.dark
                                     ? 0.25
                                     : 0.55,
                               ),
                               borderRadius: BorderRadius.circular(999),
                               border: Border.all(
-                                color: cs.outlineVariant.withOpacity(0.35),
+                                color: cs.outlineVariant.withValues(alpha: 0.35),
                               ),
                             ),
                             child: Text(
@@ -926,7 +886,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                               style: Theme.of(ctx).textTheme.labelMedium
                                   ?.copyWith(
                                     fontWeight: FontWeight.w700,
-                                    color: cs.onSecondaryContainer.withOpacity(
+                                    color: cs.onSecondaryContainer.withValues(alpha: 
                                       0.92,
                                     ),
                                   ),
@@ -1125,19 +1085,19 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
         final bgC = p?.tertiary;
         final top = bgA != null
             ? Color.alphaBlend(
-                bgA.withOpacity(isDark ? 0.22 : 0.12),
+                bgA.withValues(alpha: isDark ? 0.22 : 0.12),
                 cs.surface,
               )
             : cs.surfaceContainerLow;
         final mid = bgB != null
             ? Color.alphaBlend(
-                bgB.withOpacity(isDark ? 0.15 : 0.08),
+                bgB.withValues(alpha: isDark ? 0.15 : 0.08),
                 cs.surface,
               )
             : cs.surface;
         final accent = bgC != null
             ? Color.alphaBlend(
-                bgC.withOpacity(isDark ? 0.12 : 0.06),
+                bgC.withValues(alpha: isDark ? 0.12 : 0.06),
                 cs.surface,
               )
             : cs.surface;
@@ -1191,7 +1151,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                           decoration: InputDecoration(
                             hintText: 'Search playlist...',
                             hintStyle: TextStyle(
-                              color: cs.onSurfaceVariant.withOpacity(0.7),
+                              color: cs.onSurfaceVariant.withValues(alpha: 0.7),
                             ),
                             border: InputBorder.none,
                           ),
@@ -1443,7 +1403,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                                   borderRadius: BorderRadius.circular(20),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
+                                      color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
                                       blurRadius: 18,
                                       offset: const Offset(0, 8),
                                     ),
@@ -1514,7 +1474,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                                           vertical: 3,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: cs.secondaryContainer.withOpacity(
+                                          color: cs.secondaryContainer.withValues(alpha: 
                                             isDark ? 0.35 : 0.6,
                                           ),
                                           borderRadius: BorderRadius.circular(6),
@@ -1588,7 +1548,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   side: BorderSide(
-                                    color: cs.outlineVariant.withOpacity(0.5),
+                                    color: cs.outlineVariant.withValues(alpha: 0.5),
                                   ),
                                 ),
                               ),
@@ -1610,7 +1570,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                                 ? Icons.search_off_rounded
                                 : Icons.music_note_rounded,
                             size: 48,
-                            color: cs.onSurfaceVariant.withOpacity(0.5),
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.5),
                           ),
                           const SizedBox(height: 12),
                           Text(
@@ -1652,12 +1612,12 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: cs.primary.withOpacity(0.25 * animValue),
+                                    color: cs.primary.withValues(alpha: 0.25 * animValue),
                                     blurRadius: 18 * animValue,
                                     offset: Offset(0, 6 * animValue),
                                   ),
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.2 * animValue),
+                                    color: Colors.black.withValues(alpha: 0.2 * animValue),
                                     blurRadius: 10 * animValue,
                                     offset: Offset(0, 3 * animValue),
                                   ),
@@ -1694,7 +1654,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                             ),
                             child: Icon(
                               Icons.drag_handle_rounded,
-                              color: cs.onSurfaceVariant.withOpacity(0.7),
+                              color: cs.onSurfaceVariant.withValues(alpha: 0.7),
                             ),
                           ),
                         );
@@ -1703,7 +1663,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                           icon: Icon(
                             Icons.more_vert_rounded,
                             size: 20,
-                            color: cs.onSurfaceVariant.withOpacity(0.7),
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.7),
                           ),
                           tooltip: 'Track options',
                           onSelected: (action) {
@@ -1768,7 +1728,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                         child: Material(
                           color: isSelected
-                              ? cs.secondaryContainer.withOpacity(isDark ? 0.35 : 0.6)
+                              ? cs.secondaryContainer.withValues(alpha: isDark ? 0.35 : 0.6)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(14),
                           child: InkWell(
@@ -1864,7 +1824,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                         background: Container(
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.only(right: 24),
-                          color: Colors.redAccent.withOpacity(0.85),
+                          color: Colors.redAccent.withValues(alpha: 0.85),
                           child: const Icon(
                             Icons.delete_outline_rounded,
                             color: Colors.white,

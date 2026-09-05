@@ -8,7 +8,6 @@ import 'data/models/sort_mode.dart';
 import 'data/models/isolate_data.dart';
 import 'data/models/user_playlist.dart';
 import 'dart:async';
-import 'dart:collection';
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
@@ -19,8 +18,6 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
-import 'package:palette_generator/palette_generator.dart';
-import 'dart:typed_data';
 import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'package:audiotags/audiotags.dart';
@@ -29,9 +26,6 @@ import 'package:audio_service/audio_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:flutter/rendering.dart';
 import 'core/theme/app_theme.dart';
 import 'widgets/song_options_sheet.dart';import 'app_audio_handler.dart';
 import 'android_notifications.dart';
@@ -39,25 +33,16 @@ import 'platform_exit.dart';
 import 'services/app_local_store.dart';
 import 'services/playback_controller.dart';
 import 'services/local_audio_scanner.dart';
-import 'data/services/caching_service.dart';
-import 'utils/file_ops.dart';
 import 'utils/palette_compute.dart';
 import "dialogs/folder_management_dialog.dart";
 import "utils/song_sort_utils.dart";
 import "utils/format_utils.dart";
 import 'ui/shared/fast_artwork_widget.dart';
-import 'ui/shared/frosted_card.dart';
 import 'ui/shared/squiggly_seek_bar.dart';
-import 'widgets/now_playing_transport.dart';
 
-import 'dialogs/lyrics_editor_dialog.dart';
 import 'dialogs/playlist_dialogs.dart';
-import 'dialogs/tag_editor_dialog.dart';
-import 'pages/queue_page.dart';
-import 'utils/lyrics.dart';
 import 'utils/tag_write_access.dart';
 import 'widgets/mini_player.dart';
-import 'widgets/song_search_delegate.dart';
 
 AppAudioHandler? audioHandler;
 Future<AudioHandler>? _audioHandlerInitFuture;
@@ -519,10 +504,10 @@ Widget buildDetailBottomBars({
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
             decoration: BoxDecoration(
-              color: cs.surface.withOpacity(isDark ? 0.82 : 0.90),
+              color: cs.surface.withValues(alpha: isDark ? 0.82 : 0.90),
               border: Border(
                 top: BorderSide(
-                  color: cs.outlineVariant.withOpacity(0.18),
+                  color: cs.outlineVariant.withValues(alpha: 0.18),
                   width: 0.5,
                 ),
               ),
@@ -606,9 +591,9 @@ Widget _frostedBarBackground(BuildContext ctx, {double? opacity}) {
       filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
       child: Container(
         decoration: BoxDecoration(
-          color: cs.surface.withOpacity(op),
+          color: cs.surface.withValues(alpha: op),
           border: Border(
-            bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.04)),
+            bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.04)),
           ),
         ),
       ),
@@ -1103,10 +1088,10 @@ void _recomputeAllData() {
                 filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: cs.surface.withOpacity(isDark ? 0.82 : 0.90),
+                    color: cs.surface.withValues(alpha: isDark ? 0.82 : 0.90),
                     border: Border(
                       top: BorderSide(
-                        color: cs.outlineVariant.withOpacity(0.18),
+                        color: cs.outlineVariant.withValues(alpha: 0.18),
                         width: 0.5,
                       ),
                     ),
@@ -1429,8 +1414,9 @@ void _recomputeAllData() {
         if (id == null) {
           final base = _basename(normalized).toLowerCase();
           final candidates = byBase[base];
-          if (candidates != null && candidates.isNotEmpty)
+          if (candidates != null && candidates.isNotEmpty) {
             id = candidates.first;
+          }
         }
 
         if (id == null) continue;
@@ -1597,7 +1583,7 @@ void _recomputeAllData() {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Divider(
                     height: 1,
-                    color: cs.outlineVariant.withOpacity(0.55),
+                    color: cs.outlineVariant.withValues(alpha: 0.55),
                   ),
                 ),
                 ListTile(
@@ -1763,8 +1749,9 @@ void _recomputeAllData() {
 
     final hasAccess = audioStatus.isGranted || storageStatus.isGranted;
     if (hasAccess) {
-      if (mounted)
+      if (mounted) {
         setState(() => _permissionState = _LibraryPermissionState.granted);
+      }
       await _loadIncludedFolders();
       await _loadExcludedFolders();
       await _loadPlayHistory();
@@ -1774,8 +1761,9 @@ void _recomputeAllData() {
     }
 
     if (!fromUserAction) {
-      if (mounted)
+      if (mounted) {
         setState(() => _permissionState = _LibraryPermissionState.denied);
+      }
       return;
     }
 
@@ -1943,8 +1931,9 @@ void _recomputeAllData() {
           excludedFragments.any((fragment) => normalized.contains(fragment))) {
         return true;
       }
-      if (excludedPrefixes.any((prefix) => normalized.startsWith(prefix)))
+      if (excludedPrefixes.any((prefix) => normalized.startsWith(prefix))) {
         return true;
+      }
       return false;
     }
 
@@ -1963,8 +1952,9 @@ void _recomputeAllData() {
       // Treat "unknown" values as empty to avoid them dominating sorts.
       if (lower == 'unknown' ||
           lower == 'unknown artist' ||
-          lower == 'unknown album')
+          lower == 'unknown album') {
         return '';
+      }
       return t;
     }
 
@@ -2462,8 +2452,7 @@ void _recomputeAllData() {
                       ),
                     ),
                     // Show the detail page on top of the hidden tabs
-                    if (_inlineDetailContent != null)
-                      _inlineDetailContent!,
+                    ?_inlineDetailContent,
                   ],
                 ),
         ),
@@ -2524,8 +2513,8 @@ void _recomputeAllData() {
             shape: BoxShape.circle,
             gradient: RadialGradient(
               colors: [
-                color.withOpacity(opacity),
-                color.withOpacity(0.0),
+                color.withValues(alpha: opacity),
+                color.withValues(alpha: 0.0),
               ],
               stops: const [0.2, 1.0],
             ),
@@ -2544,11 +2533,11 @@ void _recomputeAllData() {
               end: Alignment.bottomRight,
               colors: [
                 Color.alphaBlend(
-                  primary.withOpacity(overlayOpacity),
+                  primary.withValues(alpha: overlayOpacity),
                   cs.surface,
                 ),
                 Color.alphaBlend(
-                  secondary.withOpacity(overlayOpacity * 0.9),
+                  secondary.withValues(alpha: overlayOpacity * 0.9),
                   cs.surface,
                 ),
                 cs.surface,
@@ -2656,7 +2645,7 @@ void _recomputeAllData() {
                   searchController: _searchController,
                   viewBackgroundColor: cs.surface,
                   viewSurfaceTintColor: Colors.transparent,
-                  dividerColor: cs.outlineVariant.withOpacity(0.28),
+                  dividerColor: cs.outlineVariant.withValues(alpha: 0.28),
                   builder: (context, controller) {
                     return ValueListenableBuilder<bool>(
                       valueListenable: _showSearchInAppBar,
@@ -2704,8 +2693,9 @@ void _recomputeAllData() {
                             final startMatches = <SongModel>[];
                             final containMatches = <SongModel>[];
                             for (final s in firstSongByArtist.values) {
-                              if (exact(s.artist)) exactMatches.add(s);
-                              else if (starts(s.artist)) startMatches.add(s);
+                              if (exact(s.artist)) {
+                                exactMatches.add(s);
+                              } else if (starts(s.artist)) startMatches.add(s);
                               else if (contains(s.artist)) containMatches.add(s);
                             }
                             return [...exactMatches, ...startMatches, ...containMatches].take(10).toList(growable: false);
@@ -2726,8 +2716,9 @@ void _recomputeAllData() {
                             final startMatches = <SongModel>[];
                             final containMatches = <SongModel>[];
                             for (final s in firstSongByAlbumId.values) {
-                              if (exact(s.album)) exactMatches.add(s);
-                              else if (starts(s.album)) startMatches.add(s);
+                              if (exact(s.album)) {
+                                exactMatches.add(s);
+                              } else if (starts(s.album)) startMatches.add(s);
                               else if (contains(s.album)) containMatches.add(s);
                             }
                             return [...exactMatches, ...startMatches, ...containMatches].take(10).toList(growable: false);
@@ -2741,8 +2732,9 @@ void _recomputeAllData() {
                             final startMatches = <SongModel>[];
                             final containMatches = <SongModel>[];
                             for (final s in _songs) {
-                              if (exact(s.title)) exactMatches.add(s);
-                              else if (starts(s.title)) startMatches.add(s);
+                              if (exact(s.title)) {
+                                exactMatches.add(s);
+                              } else if (starts(s.title)) startMatches.add(s);
                               else if (contains(s.title)) containMatches.add(s);
                             }
                             return [...exactMatches, ...startMatches, ...containMatches].take(20).toList(growable: false);
@@ -2778,7 +2770,7 @@ void _recomputeAllData() {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20),
                               side: BorderSide(
-                                color: cs.outlineVariant.withOpacity(0.35),
+                                color: cs.outlineVariant.withValues(alpha: 0.35),
                               ),
                             ),
                           ),
@@ -3238,7 +3230,7 @@ void _recomputeAllData() {
 
                           final tileColor = (_isSelectionMode && isSelected)
                               ? Color.alphaBlend(
-                                  cs.primaryContainer.withOpacity(
+                                  cs.primaryContainer.withValues(alpha: 
                                     Theme.of(context).brightness == Brightness.dark
                                         ? 0.28
                                         : 0.55,
@@ -3247,7 +3239,7 @@ void _recomputeAllData() {
                                 )
                               : isCurrent
                               ? Color.alphaBlend(
-                                  cs.secondaryContainer.withOpacity(
+                                  cs.secondaryContainer.withValues(alpha: 
                                     Theme.of(context).brightness == Brightness.dark
                                         ? 0.35
                                         : 0.55,
@@ -3257,18 +3249,18 @@ void _recomputeAllData() {
                               : cs.surfaceContainerLow;
 
                           final borderColor = (_isSelectionMode && isSelected)
-                              ? cs.primary.withOpacity(
+                              ? cs.primary.withValues(alpha: 
                                   Theme.of(context).brightness == Brightness.dark
                                       ? 0.35
                                       : 0.30,
                                 )
                               : isCurrent
-                              ? cs.secondary.withOpacity(
+                              ? cs.secondary.withValues(alpha: 
                                   Theme.of(context).brightness == Brightness.dark
                                       ? 0.30
                                       : 0.22,
                                 )
-                              : cs.outlineVariant.withOpacity(
+                              : cs.outlineVariant.withValues(alpha: 
                                   Theme.of(context).brightness == Brightness.dark
                                       ? 0.28
                                       : 0.35,
@@ -3292,7 +3284,7 @@ void _recomputeAllData() {
                                     blurRadius: 10,
                                     spreadRadius: -6,
                                     offset: const Offset(0, 6),
-                                    color: Colors.black.withOpacity(
+                                    color: Colors.black.withValues(alpha: 
                                       isCurrent ? 0.12 : 0.08,
                                     ),
                                   ),
@@ -3303,7 +3295,7 @@ void _recomputeAllData() {
                                     blurRadius: 18,
                                     spreadRadius: -8,
                                     offset: const Offset(0, 10),
-                                    color: cs.primary.withOpacity(
+                                    color: cs.primary.withValues(alpha: 
                                       Theme.of(context).brightness == Brightness.dark
                                           ? 0.28
                                           : 0.18,
@@ -3417,7 +3409,7 @@ void _recomputeAllData() {
                                                         const EdgeInsets.all(4),
                                                     decoration: BoxDecoration(
                                                       color: Color.alphaBlend(
-                                                        cs.surface.withOpacity(
+                                                        cs.surface.withValues(alpha: 
                                                           0.75,
                                                         ),
                                                         cs.surfaceContainerHigh,
@@ -3428,7 +3420,7 @@ void _recomputeAllData() {
                                                       ),
                                                       border: Border.all(
                                                         color: cs.outlineVariant
-                                                            .withOpacity(0.35),
+                                                            .withValues(alpha: 0.35),
                                                       ),
                                                     ),
                                                     child: Icon(
@@ -3453,7 +3445,7 @@ void _recomputeAllData() {
                                                         const EdgeInsets.all(4),
                                                     decoration: BoxDecoration(
                                                       color: Color.alphaBlend(
-                                                        cs.surface.withOpacity(
+                                                        cs.surface.withValues(alpha: 
                                                           0.75,
                                                         ),
                                                         cs.surfaceContainerHigh,
@@ -3464,7 +3456,7 @@ void _recomputeAllData() {
                                                       ),
                                                       border: Border.all(
                                                         color: cs.outlineVariant
-                                                            .withOpacity(0.35),
+                                                            .withValues(alpha: 0.35),
                                                       ),
                                                     ),
                                                     child: Icon(
@@ -3475,7 +3467,7 @@ void _recomputeAllData() {
                                                               .pause_circle_filled_rounded,
                                                       size: 14,
                                                       color: cs.onSurface
-                                                          .withOpacity(0.85),
+                                                          .withValues(alpha: 0.85),
                                                     ),
                                                   ),
                                                 ),
@@ -3530,7 +3522,7 @@ void _recomputeAllData() {
                                                             ?.copyWith(
                                                               color: cs
                                                                   .onSurfaceVariant
-                                                                  .withOpacity(0.75),
+                                                                  .withValues(alpha: 0.75),
                                                             ),
                                                       ),
                                                     ),
@@ -3550,7 +3542,7 @@ void _recomputeAllData() {
                                                             ?.copyWith(
                                                               color: cs
                                                                   .onSurfaceVariant
-                                                                  .withOpacity(
+                                                                  .withValues(alpha: 
                                                                     durationText ==
                                                                             null
                                                                         ? 0.45
@@ -3766,7 +3758,7 @@ void _recomputeAllData() {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                         side: BorderSide(
-                          color: cs.outlineVariant.withOpacity(0.35),
+                          color: cs.outlineVariant.withValues(alpha: 0.35),
                         ),
                       ),
                     ),
@@ -3994,7 +3986,7 @@ void _recomputeAllData() {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                         side: BorderSide(
-                          color: cs.outlineVariant.withOpacity(0.35),
+                          color: cs.outlineVariant.withValues(alpha: 0.35),
                         ),
                       ),
                     ),
@@ -4171,7 +4163,7 @@ void _recomputeAllData() {
             color: cs.surfaceContainerLow,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(22),
-              side: BorderSide(color: cs.outlineVariant.withOpacity(0.35)),
+              side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.35)),
             ),
           ),
           child: Material(
@@ -4383,13 +4375,13 @@ void _recomputeAllData() {
                           borderRadius: BorderRadius.circular(22),
                           boxShadow: [
                             BoxShadow(
-                              color: cs.primary.withOpacity(0.35 * animValue),
+                              color: cs.primary.withValues(alpha: 0.35 * animValue),
                               blurRadius: 24 * animValue,
                               spreadRadius: 2 * animValue,
                               offset: Offset(0, 8 * animValue),
                             ),
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2 * animValue),
+                              color: Colors.black.withValues(alpha: 0.2 * animValue),
                               blurRadius: 12 * animValue,
                               offset: Offset(0, 4 * animValue),
                             ),
@@ -4777,14 +4769,14 @@ class _LibraryPermissionGate extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: cs.secondaryContainer.withOpacity(
+                    color: cs.secondaryContainer.withValues(alpha: 
                       Theme.of(context).brightness == Brightness.dark
                           ? 0.25
                           : 0.6,
                     ),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: cs.outlineVariant.withOpacity(0.35),
+                      color: cs.outlineVariant.withValues(alpha: 0.35),
                     ),
                   ),
                   child: Icon(

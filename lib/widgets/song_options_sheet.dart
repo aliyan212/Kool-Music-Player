@@ -157,7 +157,7 @@ Future<void> showSongOptionsSheet({
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Divider(
                   height: 1,
-                  color: cs.outlineVariant.withOpacity(isDark ? 0.35 : 0.55),
+                  color: cs.outlineVariant.withValues(alpha: isDark ? 0.35 : 0.55),
                 ),
               ),
 

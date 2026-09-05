@@ -1,59 +1,8 @@
-import '../data/models/album_stat.dart';
-import '../data/models/sort_mode.dart';
-import '../data/models/isolate_data.dart';
-import '../data/models/user_playlist.dart';
 import 'dart:async';
-import 'dart:collection';
-import 'dart:convert';
-import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:dynamic_color/dynamic_color.dart';
-import 'package:on_audio_query/on_audio_query.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_media_kit/just_audio_media_kit.dart';
-import 'package:palette_generator/palette_generator.dart';
-import 'dart:typed_data';
-import 'dart:ffi';
-import 'package:ffi/ffi.dart';
-import 'package:audiotags/audiotags.dart';
 import 'dart:math' as math;
-import 'package:audio_service/audio_service.dart';
-import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:flutter/rendering.dart';
-import '../core/theme/app_theme.dart';
-import '../widgets/song_options_sheet.dart';
-import '../app_audio_handler.dart';
-import '../android_notifications.dart';
-import '../platform_exit.dart';
-import '../services/app_local_store.dart';
-import '../services/playback_controller.dart';
-import '../services/local_audio_scanner.dart';
-import '../data/services/caching_service.dart';
-import '../utils/file_ops.dart';
-import '../utils/palette_compute.dart';
-import '../ui/shared/fast_artwork_widget.dart';
 import '../ui/shared/frosted_card.dart';
-import '../ui/shared/squiggly_seek_bar.dart';
-import '../widgets/now_playing_transport.dart';
-import '../dialogs/lyrics_editor_dialog.dart';
-import '../dialogs/playlist_dialogs.dart';
-import '../dialogs/tag_editor_dialog.dart';
-import '../pages/queue_page.dart';
-import '../utils/lyrics.dart';
-import '../utils/tag_write_access.dart';
-import '../widgets/mini_player.dart';
-import '../widgets/song_search_delegate.dart';
-import '../utils/format_utils.dart';
-import '../utils/song_sort_utils.dart';
-import '../dialogs/folder_management_dialog.dart';
-import '../main.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -170,7 +119,7 @@ class _AboutPageState extends State<AboutPage>
               Text(
                 description,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: cs.onInverseSurface.withOpacity(0.92),
+                  color: cs.onInverseSurface.withValues(alpha: 0.92),
                   height: 1.25,
                 ),
               ),
@@ -230,7 +179,7 @@ class _AboutPageState extends State<AboutPage>
               final top = isDark
                   ? const Color(0xFF121016)
                   : const Color(0xFFF7F3FF);
-              final mid = cs.primary.withOpacity(
+              final mid = cs.primary.withValues(alpha: 
                 isDark ? 0.26 : vibe.midOpacity,
               );
               final bottom = isDark
@@ -251,7 +200,7 @@ class _AboutPageState extends State<AboutPage>
             top: -40,
             left: -30,
             child: _Bubble(
-              color: cs.primary.withOpacity(isDark ? 0.18 : 0.12),
+              color: cs.primary.withValues(alpha: isDark ? 0.18 : 0.12),
               size: 180,
               animation: _bg,
               phase: 0.15,
@@ -262,7 +211,7 @@ class _AboutPageState extends State<AboutPage>
             bottom: -50,
             right: -40,
             child: _Bubble(
-              color: cs.secondary.withOpacity(isDark ? 0.18 : 0.10),
+              color: cs.secondary.withValues(alpha: isDark ? 0.18 : 0.10),
               size: 220,
               animation: _bg,
               phase: 0.55,
@@ -314,7 +263,7 @@ class _AboutPageState extends State<AboutPage>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Material(
-                              color: cs.primaryContainer.withOpacity(
+                              color: cs.primaryContainer.withValues(alpha: 
                                 isDark ? 0.25 : 0.80,
                               ),
                               borderRadius: BorderRadius.circular(22),
@@ -359,7 +308,7 @@ class _AboutPageState extends State<AboutPage>
                                     'Tip: tap the music note to change this line. You’re literally doing UI testing right now.',
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
-                                          color: subColor.withOpacity(0.9),
+                                          color: subColor.withValues(alpha: 0.9),
                                         ),
                                   ),
                                 ],
@@ -565,7 +514,7 @@ class _AboutPill extends StatelessWidget {
     final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: cs.secondaryContainer.withOpacity(
+        color: cs.secondaryContainer.withValues(alpha: 
           Theme.of(context).brightness == Brightness.dark ? 0.22 : 0.55,
         ),
         borderRadius: BorderRadius.circular(999),
@@ -581,13 +530,13 @@ class _AboutPill extends StatelessWidget {
           Icon(
             icon,
             size: 16,
-            color: cs.onSecondaryContainer.withOpacity(0.85),
+            color: cs.onSecondaryContainer.withValues(alpha: 0.85),
           ),
           const SizedBox(width: 7),
           Text(
             text,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: cs.onSecondaryContainer.withOpacity(0.92),
+              color: cs.onSecondaryContainer.withValues(alpha: 0.92),
               fontWeight: FontWeight.w700,
             ),
           ),

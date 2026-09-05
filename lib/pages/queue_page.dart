@@ -1,72 +1,16 @@
-import '../data/models/album_stat.dart';
-import '../data/models/sort_mode.dart';
-import '../data/models/isolate_data.dart';
-import '../data/models/user_playlist.dart';
 import 'dart:async';
-import 'dart:collection';
-import 'dart:convert';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_media_kit/just_audio_media_kit.dart';
-import 'package:palette_generator/palette_generator.dart';
-import 'dart:typed_data';
-import 'dart:ffi';
-import 'package:ffi/ffi.dart';
-import 'package:audiotags/audiotags.dart';
-import 'dart:math' as math;
 import 'package:audio_service/audio_service.dart';
-import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:flutter/rendering.dart';
-import '../core/theme/app_theme.dart';
-import '../widgets/song_options_sheet.dart';
-import '../app_audio_handler.dart';
-import '../android_notifications.dart';
-import '../platform_exit.dart';
-import '../services/app_local_store.dart';
-import '../services/playback_controller.dart';
-import '../services/local_audio_scanner.dart';
-import '../data/services/caching_service.dart';
-import '../utils/file_ops.dart';
-import '../utils/palette_compute.dart';
 import '../ui/shared/fast_artwork_widget.dart';
-import '../ui/shared/frosted_card.dart';
-import '../ui/shared/squiggly_seek_bar.dart';
-import '../widgets/now_playing_transport.dart';
-import '../dialogs/lyrics_editor_dialog.dart';
-import '../dialogs/playlist_dialogs.dart';
-import '../dialogs/tag_editor_dialog.dart';
-import '../pages/queue_page.dart';
-import '../utils/lyrics.dart';
-import '../utils/tag_write_access.dart';
-import '../widgets/mini_player.dart';
-import '../widgets/song_search_delegate.dart';
 import '../utils/format_utils.dart';
-import '../utils/song_sort_utils.dart';
-import '../dialogs/folder_management_dialog.dart';
-import '../main.dart';
 
 
-import 'dart:async';
-import 'dart:ui';
 
-import 'package:audio_service/audio_service.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:on_audio_query/on_audio_query.dart';
 
-import '../main.dart';
-import '../ui/shared/fast_artwork_widget.dart';
 
 
 class QueuePage extends StatefulWidget {
@@ -133,13 +77,13 @@ class _QueuePageState extends State<QueuePage> {
     _songById = {for (final s in widget.songs) s.id: s};
 
     final initialSequence = widget.player.sequence;
-    if (initialSequence != null && initialSequence.isNotEmpty) {
+    if (initialSequence.isNotEmpty) {
       _queue = _queueFromSequence(initialSequence);
     } else {
       _queue = List.from(widget.songs);
     }
 
-    if (initialSequence != null && initialSequence.isNotEmpty) {
+    if (initialSequence.isNotEmpty) {
       final sameLength = widget.songs.length == _queue.length;
       if (sameLength && !_sameQueueById(widget.songs, _queue) && _queue.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -159,8 +103,8 @@ class _QueuePageState extends State<QueuePage> {
       if (!mounted) return;
       if (_isReordering || _ignoreSequenceUpdates) return;
 
-      final seq = state?.sequence;
-      if (seq == null || seq.isEmpty) return;
+      final seq = state.sequence;
+      if (seq.isEmpty) return;
 
       final mappedQueue = _queueFromSequence(seq);
       final nextQueue = mappedQueue.isNotEmpty ? mappedQueue : _queue;
@@ -279,9 +223,9 @@ class _QueuePageState extends State<QueuePage> {
     final bgColor = cs.surface;
     final textColor = cs.onSurface;
     final textColorSecondary = cs.onSurfaceVariant;
-    final textColorTertiary = cs.onSurfaceVariant.withOpacity(0.78);
-    final dividerColor = cs.outlineVariant.withOpacity(0.45);
-    final surfaceColor = Color.alphaBlend(cs.primary.withOpacity(0.04), cs.surface);
+    final textColorTertiary = cs.onSurfaceVariant.withValues(alpha: 0.78);
+    final dividerColor = cs.outlineVariant.withValues(alpha: 0.45);
+    final surfaceColor = Color.alphaBlend(cs.primary.withValues(alpha: 0.04), cs.surface);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -417,8 +361,8 @@ class _QueuePageState extends State<QueuePage> {
     final cs = Theme.of(context).colorScheme;
     final textColor = cs.onSurface;
     final textColorSecondary = cs.onSurfaceVariant;
-    final nullArtworkBg = cs.secondaryContainer.withOpacity(0.55);
-    final nullArtworkIcon = cs.onSecondaryContainer.withOpacity(0.7);
+    final nullArtworkBg = cs.secondaryContainer.withValues(alpha: 0.55);
+    final nullArtworkIcon = cs.onSecondaryContainer.withValues(alpha: 0.7);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -426,12 +370,12 @@ class _QueuePageState extends State<QueuePage> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Color.alphaBlend(cs.primary.withOpacity(0.14), cs.primaryContainer),
-            Color.alphaBlend(cs.secondary.withOpacity(0.1), cs.secondaryContainer),
+            Color.alphaBlend(cs.primary.withValues(alpha: 0.14), cs.primaryContainer),
+            Color.alphaBlend(cs.secondary.withValues(alpha: 0.1), cs.secondaryContainer),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.primary.withOpacity(0.2)),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -500,11 +444,11 @@ class _QueuePageState extends State<QueuePage> {
     final cs = Theme.of(context).colorScheme;
     final textColor = cs.onSurface;
     final textColorTertiary = cs.onSurfaceVariant;
-    final nullArtworkBg = cs.secondaryContainer.withOpacity(0.5);
-    final nullArtworkIcon = cs.onSecondaryContainer.withOpacity(0.72);
-    final dragHandleColor = cs.onSurfaceVariant.withOpacity(0.8);
-    final tileBg = Color.alphaBlend(cs.primary.withOpacity(0.03), cs.surface);
-    final tileBorder = cs.outlineVariant.withOpacity(0.38);
+    final nullArtworkBg = cs.secondaryContainer.withValues(alpha: 0.5);
+    final nullArtworkIcon = cs.onSecondaryContainer.withValues(alpha: 0.72);
+    final dragHandleColor = cs.onSurfaceVariant.withValues(alpha: 0.8);
+    final tileBg = Color.alphaBlend(cs.primary.withValues(alpha: 0.03), cs.surface);
+    final tileBorder = cs.outlineVariant.withValues(alpha: 0.38);
     final deleteBg = cs.errorContainer;
     final deleteFg = cs.onErrorContainer;
 
@@ -580,7 +524,7 @@ class _QueuePageState extends State<QueuePage> {
                               height: 26,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                color: cs.secondaryContainer.withOpacity(0.7),
+                                color: cs.secondaryContainer.withValues(alpha: 0.7),
                                 borderRadius: BorderRadius.circular(9),
                               ),
                               child: Text(

@@ -1,58 +1,12 @@
-import '../data/models/album_stat.dart';
-import '../data/models/sort_mode.dart';
-import '../data/models/isolate_data.dart';
-import '../data/models/user_playlist.dart';
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
-import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_media_kit/just_audio_media_kit.dart';
-import 'package:palette_generator/palette_generator.dart';
-import 'dart:typed_data';
-import 'dart:ffi';
-import 'package:ffi/ffi.dart';
-import 'package:audiotags/audiotags.dart';
-import 'dart:math' as math;
-import 'package:audio_service/audio_service.dart';
-import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:flutter/rendering.dart';
-import '../core/theme/app_theme.dart';
-import '../widgets/song_options_sheet.dart';
-import '../app_audio_handler.dart';
-import '../android_notifications.dart';
-import '../platform_exit.dart';
-import '../services/app_local_store.dart';
-import '../services/playback_controller.dart';
-import '../services/local_audio_scanner.dart';
-import '../data/services/caching_service.dart';
-import '../utils/file_ops.dart';
 import '../utils/palette_compute.dart';
 import '../ui/shared/fast_artwork_widget.dart';
-import '../ui/shared/frosted_card.dart';
-import '../ui/shared/squiggly_seek_bar.dart';
-import '../widgets/now_playing_transport.dart';
-import '../dialogs/lyrics_editor_dialog.dart';
-import '../dialogs/playlist_dialogs.dart';
-import '../dialogs/tag_editor_dialog.dart';
-import '../pages/queue_page.dart';
-import '../utils/lyrics.dart';
-import '../utils/tag_write_access.dart';
-import '../widgets/mini_player.dart';
-import '../widgets/song_search_delegate.dart';
 import '../utils/format_utils.dart';
-import '../utils/song_sort_utils.dart';
-import '../dialogs/folder_management_dialog.dart';
 import '../main.dart';
 
 class AlbumPage extends StatefulWidget {
@@ -110,7 +64,7 @@ class AlbumPage extends StatefulWidget {
 
   static Future<({Color primary, Color secondary, Color tertiary})?> _loadAlbumPalette(
     int albumId,
-    bool _isDark,
+    bool isDark,
   ) async {
     try {
       final cached = _albumPaletteCache.remove(albumId);
@@ -191,19 +145,19 @@ class AlbumPage extends StatefulWidget {
           final bgC = p?.tertiary;
           final top = bgA != null
               ? Color.alphaBlend(
-                  bgA.withOpacity(isDark ? 0.20 : 0.10),
+                  bgA.withValues(alpha: isDark ? 0.20 : 0.10),
                   cs.surface,
                 )
               : cs.surface;
           final mid = bgB != null
               ? Color.alphaBlend(
-                  bgB.withOpacity(isDark ? 0.12 : 0.06),
+                  bgB.withValues(alpha: isDark ? 0.12 : 0.06),
                   cs.surface,
                 )
               : cs.surface;
           final accent = bgC != null
               ? Color.alphaBlend(
-                  bgC.withOpacity(isDark ? 0.08 : 0.04),
+                  bgC.withValues(alpha: isDark ? 0.08 : 0.04),
                   cs.surface,
                 )
               : cs.surface;
@@ -264,7 +218,7 @@ class AlbumPage extends StatefulWidget {
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
+                                      color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
                                       blurRadius: 16,
                                       offset: const Offset(0, 8),
                                     ),
@@ -324,19 +278,19 @@ class AlbumPage extends StatefulWidget {
                                         vertical: 5,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: cs.secondaryContainer.withOpacity(
+                                        color: cs.secondaryContainer.withValues(alpha: 
                                           isDark ? 0.30 : 0.60,
                                         ),
                                         borderRadius: BorderRadius.circular(999),
                                         border: Border.all(
-                                          color: cs.outlineVariant.withOpacity(0.35),
+                                          color: cs.outlineVariant.withValues(alpha: 0.35),
                                         ),
                                       ),
                                       child: Text(
                                         subtitle,
                                         style: Theme.of(context).textTheme.labelMedium?.copyWith(
                                           fontWeight: FontWeight.w700,
-                                          color: cs.onSecondaryContainer.withOpacity(0.92),
+                                          color: cs.onSecondaryContainer.withValues(alpha: 0.92),
                                         ),
                                       ),
                                     ),

@@ -435,9 +435,7 @@ class LocalAudioScanner {
       } catch (_) {}
     }
 
-    if (artworkBytes == null) {
-      artworkBytes = Uint8List(0);
-    }
+    artworkBytes ??= Uint8List(0);
     
     CachingService().thumbnailCache[key] = artworkBytes;
     CachingService().highResCache[key] = artworkBytes;

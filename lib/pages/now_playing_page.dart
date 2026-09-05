@@ -1,58 +1,27 @@
-import '../data/models/album_stat.dart';
-import '../data/models/sort_mode.dart';
-import '../data/models/isolate_data.dart';
-import '../data/models/user_playlist.dart';
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_media_kit/just_audio_media_kit.dart';
-import 'package:palette_generator/palette_generator.dart';
-import 'dart:typed_data';
-import 'dart:ffi';
-import 'package:ffi/ffi.dart';
 import 'package:audiotags/audiotags.dart';
 import 'dart:math' as math;
 import 'package:audio_service/audio_service.dart';
-import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:flutter/rendering.dart';
-import '../core/theme/app_theme.dart';
-import '../widgets/song_options_sheet.dart';
-import '../app_audio_handler.dart';
 import '../android_notifications.dart';
-import '../platform_exit.dart';
-import '../services/app_local_store.dart';
-import '../services/playback_controller.dart';
-import '../services/local_audio_scanner.dart';
-import '../data/services/caching_service.dart';
-import '../utils/file_ops.dart';
 import '../utils/palette_compute.dart';
 import '../ui/shared/fast_artwork_widget.dart';
-import '../ui/shared/frosted_card.dart';
 import '../ui/shared/squiggly_seek_bar.dart';
 import '../widgets/now_playing_transport.dart';
 import '../dialogs/lyrics_editor_dialog.dart';
-import '../dialogs/playlist_dialogs.dart';
 import '../dialogs/tag_editor_dialog.dart';
 import '../pages/queue_page.dart';
 import '../utils/lyrics.dart';
 import '../utils/tag_write_access.dart';
-import '../widgets/mini_player.dart';
-import '../widgets/song_search_delegate.dart';
 import '../utils/format_utils.dart';
-import '../utils/song_sort_utils.dart';
-import '../dialogs/folder_management_dialog.dart';
 import '../main.dart';
 
 class NowPlayingPage extends StatefulWidget {
@@ -206,7 +175,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
       // Get the current song from the player's sequence to handle queue changes correctly
       final sequence = widget.player.sequence;
-      if (sequence == null || index >= sequence.length) return;
+      if (index >= sequence.length) return;
 
       final currentSource = sequence[index];
       final tag = currentSource.tag;
@@ -759,8 +728,8 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        Theme.of(context).colorScheme.primary.withOpacity(isDark ? 0.10 : 0.06),
-        Theme.of(context).colorScheme.surface.withOpacity(isDark ? 0.14 : 0.10),
+        Theme.of(context).colorScheme.primary.withValues(alpha: isDark ? 0.10 : 0.06),
+        Theme.of(context).colorScheme.surface.withValues(alpha: isDark ? 0.14 : 0.10),
       ],
     );
 
@@ -816,13 +785,13 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                   boxShadow: [
                                     BoxShadow(
                                       color: (_primaryColor ?? Colors.black)
-                                          .withOpacity(0.5),
+                                          .withValues(alpha: 0.5),
                                       blurRadius: 40,
                                       spreadRadius: 10,
                                       offset: const Offset(0, 15),
                                     ),
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.3),
+                                      color: Colors.black.withValues(alpha: 0.3),
                                       blurRadius: 20,
                                       offset: const Offset(0, 10),
                                     ),
@@ -900,7 +869,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                                   color: Theme.of(context)
                                                       .colorScheme
                                                       .surface
-                                                      .withOpacity(
+                                                      .withValues(alpha: 
                                                         isDark ? 0.28 : 0.40,
                                                       ),
                                                   border: Border.all(
@@ -933,7 +902,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                                           IconButton.styleFrom(
                                                             backgroundColor:
                                                                 iconBgColor
-                                                                    .withOpacity(
+                                                                    .withValues(alpha: 
                                                                       0.30,
                                                                     ),
                                                             foregroundColor:
@@ -969,7 +938,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                                           style: IconButton.styleFrom(
                                                             backgroundColor:
                                                                 iconBgColor
-                                                                    .withOpacity(
+                                                                    .withValues(alpha: 
                                                                       0.30,
                                                                     ),
                                                             foregroundColor:
@@ -992,7 +961,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                                           IconButton.styleFrom(
                                                             backgroundColor:
                                                                 iconBgColor
-                                                                    .withOpacity(
+                                                                    .withValues(alpha: 
                                                                       0.30,
                                                                     ),
                                                             foregroundColor:
@@ -1038,7 +1007,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              color: textColor.withOpacity(0.82),
+                              color: textColor.withValues(alpha: 0.82),
                               fontWeight: FontWeight.w600,
                             ),
                       ),
@@ -1130,7 +1099,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     final textColorSecondary = isDark ? Colors.white70 : Colors.black54;
     final iconBgColor = isDark
         ? Colors.white10
-        : Colors.black.withOpacity(0.08);
+        : Colors.black.withValues(alpha: 0.08);
     final iconFgColor = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
@@ -1193,9 +1162,9 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                 shape: BoxShape.circle,
                                 gradient: RadialGradient(
                                   colors: [
-                                    color.withOpacity(1.0),
-                                    color.withOpacity(0.75),
-                                    color.withOpacity(0.0),
+                                    color.withValues(alpha: 1.0),
+                                    color.withValues(alpha: 0.75),
+                                    color.withValues(alpha: 0.0),
                                   ],
                                   stops: const [0.0, 0.45, 1.0],
                                 ),
@@ -1209,7 +1178,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [c1.withOpacity(0.8), c3.withOpacity(0.8)],
+                              colors: [c1.withValues(alpha: 0.8), c3.withValues(alpha: 0.8)],
                             ),
                           ),
                           child: Stack(
@@ -1230,7 +1199,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                               radius: 1.1,
                               colors: [
                                 Colors.transparent,
-                                (isDark ? Colors.black : Colors.white).withOpacity(
+                                (isDark ? Colors.black : Colors.white).withValues(alpha: 
                                   isDark ? 0.22 : 0.16,
                                 ),
                               ],
@@ -1555,7 +1524,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                           .textTheme
                                           .titleMedium
                                           ?.copyWith(
-                                            color: textColor.withOpacity(0.8),
+                                            color: textColor.withValues(alpha: 0.8),
                                             fontWeight: FontWeight.w500,
                                           ),
                                       textAlign: TextAlign.center,
@@ -1842,7 +1811,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   Widget _buildArtworkPageView({required double side}) {
     final sequence = widget.player.sequence;
-    if (sequence == null || sequence.isEmpty) {
+    if (sequence.isEmpty) {
       return _buildNowPlayingArtwork(side: side);
     }
 
@@ -1935,13 +1904,13 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                      color: (_primaryColor ?? Colors.black).withOpacity(0.5),
+                      color: (_primaryColor ?? Colors.black).withValues(alpha: 0.5),
                       blurRadius: 40,
                       spreadRadius: 10,
                       offset: const Offset(0, 15),
                     ),
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.3),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -1957,7 +1926,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   }
 
   Widget _buildLyricsView() {
-    if (_rawLyrics == null)
+    if (_rawLyrics == null) {
       return Container(
         alignment: Alignment.center,
         child: const Text(
@@ -1965,6 +1934,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
           style: TextStyle(color: Colors.white54, fontSize: 18),
         ),
       );
+    }
 
     // Non-synced lyrics: keep it simple (no auto-scroll).
     if (!_isSynced || _lrcLines.isEmpty) {
@@ -2045,8 +2015,9 @@ class _LyricLineTileState extends State<_LyricLineTile> {
 
   _LyricTileMode _computeMode(int active) {
     if (widget.index == active) return _LyricTileMode.active;
-    if ((widget.index - active).abs() <= _nearWindow)
+    if ((widget.index - active).abs() <= _nearWindow) {
       return _LyricTileMode.near;
+    }
     return _LyricTileMode.normal;
   }
 
@@ -2091,7 +2062,7 @@ class _LyricLineTileState extends State<_LyricLineTile> {
     final shadows = isActive
         ? <Shadow>[
             Shadow(
-              color: Colors.white.withOpacity(0.28),
+              color: Colors.white.withValues(alpha: 0.28),
               blurRadius: 14,
               offset: Offset.zero,
             ),

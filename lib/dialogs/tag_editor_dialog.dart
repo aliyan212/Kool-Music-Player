@@ -1,6 +1,5 @@
 
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:audiotags/audiotags.dart';
 import 'package:file_picker/file_picker.dart';
@@ -431,7 +430,7 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
     final headerBgColor = bgColor;
     final textColor = cs.onSurface;
     final textColorSecondary = cs.onSurfaceVariant;
-    final textColorTertiary = cs.onSurfaceVariant.withOpacity(0.72);
+    final textColorTertiary = cs.onSurfaceVariant.withValues(alpha: 0.72);
 
     return Dialog(
       backgroundColor: bgColor,
@@ -710,7 +709,7 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
     final cs = Theme.of(context).colorScheme;
     final textColor = cs.onSurface;
     final labelColor = cs.onSurfaceVariant;
-    final iconColor = cs.onSurfaceVariant.withOpacity(0.75);
+    final iconColor = cs.onSurfaceVariant.withValues(alpha: 0.75);
     final fillColor = cs.surfaceContainerLow;
 
     return Padding(
@@ -727,7 +726,7 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
           fillColor: fillColor,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.3)),
+            borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),

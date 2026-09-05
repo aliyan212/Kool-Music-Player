@@ -1,6 +1,5 @@
 import 'package:on_audio_query/on_audio_query.dart';
 import '../services/playback_controller.dart';
-import 'format_utils.dart';
 
 final _yearRegex = RegExp(r'\b(19|20)\d{2}\b');
 
