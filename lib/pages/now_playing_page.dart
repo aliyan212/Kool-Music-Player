@@ -523,7 +523,21 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final idx = _activeLyricIndexForPosition(widget.player.position);
-      _scrollToActiveLine(idx);
+      if (_lyricItemScrollController.isAttached) {
+        int targetIndex = idx;
+        double targetAlignment = 0.40;
+        if (idx < 3) {
+          targetIndex = 0;
+          targetAlignment = 0.05;
+        }
+        _lyricItemScrollController.jumpTo(
+          index: targetIndex.clamp(
+            0,
+            (_lrcLines.isEmpty ? 0 : _lrcLines.length - 1),
+          ),
+          alignment: targetAlignment,
+        );
+      }
     });
   }
 
@@ -714,11 +728,25 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   void _scrollToActiveLine(int index) {
     if (!_lyricItemScrollController.isAttached) return;
+
+    int targetIndex = index;
+    double targetAlignment = 0.40;
+
+    // Prevent scrolling for the first few lines so they just light up in place
+    // without forcing the list to scroll unnecessarily.
+    if (index < 3) {
+      targetIndex = 0;
+      targetAlignment = 0.05;
+    }
+
     // ScrollablePositionedList can jump/scroll to offscreen items efficiently.
     _lyricItemScrollController.scrollTo(
-      index: index.clamp(0, (_lrcLines.isEmpty ? 0 : _lrcLines.length - 1)),
-      alignment: 0.35,
-      duration: const Duration(milliseconds: 280),
+      index: targetIndex.clamp(
+        0,
+        (_lrcLines.isEmpty ? 0 : _lrcLines.length - 1),
+      ),
+      alignment: targetAlignment,
+      duration: const Duration(milliseconds: 450),
       curve: Curves.easeOutCubic,
     );
   }
