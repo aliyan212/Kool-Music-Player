@@ -67,7 +67,7 @@ Full-screen listening experience featuring real-time synchronized lyrics and art
 - **Audio:** `just_audio`, `audio_service`, `audio_session`
 - **Library query:** `on_audio_query`
 - **Storage:** `hive_flutter`, `shared_preferences`
-- **Theming & UI:** `dynamic_color`, `palette_generator`, `google_fonts`
+- **Theming & UI:** `dynamic_color`, `palette_generator`, Material 3 design
 - **Utilities:** `permission_handler`, `file_picker`, `audiotags`
 
 ## Project structure

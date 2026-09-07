@@ -45,8 +45,6 @@ dependencies:
   file_picker: ^8.3.7
   wakelock_plus: ^1.4.0
   scrollable_positioned_list: ^0.3.8
-  google_fonts: ^6.2.1
-  image: ^4.0.17
   path: ^1.9.0
   ffi: ^2.2.0
   media_kit_libs_linux: ^1.2.1
