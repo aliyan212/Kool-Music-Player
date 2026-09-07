@@ -2407,119 +2407,6 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Widget _wrapWithAuroraBackground({required Widget child}) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final rawPrimary = boostVibrance(
-      cs.primaryContainer,
-      extraSaturation: 0.08,
-      extraLightness: isDark ? -0.04 : 0.04,
-    );
-    final rawSecondary = boostVibrance(
-      cs.tertiaryContainer,
-      extraSaturation: 0.10,
-      extraLightness: isDark ? -0.03 : 0.03,
-    );
-    final rawAccent = boostVibrance(
-      cs.secondaryContainer,
-      extraSaturation: 0.10,
-      extraLightness: isDark ? -0.03 : 0.03,
-    );
-
-    final primary = harmonizeBackgroundAccent(
-      rawPrimary,
-      cs.surface,
-      isDark: isDark,
-    );
-    final secondary = harmonizeBackgroundAccent(
-      rawSecondary,
-      cs.surface,
-      isDark: isDark,
-    );
-    final accent = harmonizeBackgroundAccent(
-      rawAccent,
-      cs.surface,
-      isDark: isDark,
-    );
-    final overlayOpacity = isDark ? 0.12 : 0.18;
-
-    Widget blob(
-      Color color,
-      double size,
-      Alignment alignment, {
-      double opacity = 0.28,
-    }) {
-      return Align(
-        alignment: alignment,
-        // Using a RadialGradient is mathematically pre-calculated by the rendering
-        // engine and costs 99% less GPU overhead than an ImageFilter.blur.
-        child: Container(
-          width: size * 1.6, // Slightly larger to mimic the blur spread
-          height: size * 1.6,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [
-                color.withValues(alpha: opacity),
-                color.withValues(alpha: 0.0),
-              ],
-              stops: const [0.2, 1.0],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color.alphaBlend(
-                  primary.withValues(alpha: overlayOpacity),
-                  cs.surface,
-                ),
-                Color.alphaBlend(
-                  secondary.withValues(alpha: overlayOpacity * 0.9),
-                  cs.surface,
-                ),
-                cs.surface,
-              ],
-            ),
-          ),
-        ),
-        IgnorePointer(
-          child: Stack(
-            children: [
-              blob(
-                primary,
-                240,
-                Alignment.topLeft,
-                opacity: isDark ? 0.08 : 0.14,
-              ),
-              blob(
-                secondary,
-                260,
-                Alignment.topRight,
-                opacity: isDark ? 0.07 : 0.12,
-              ),
-              blob(
-                accent,
-                200,
-                Alignment.bottomLeft,
-                opacity: isDark ? 0.06 : 0.10,
-              ),
-            ],
-          ),
-        ),
-        child,
-      ],
-    );
-  }
 
   Widget _buildLibraryTab(BuildContext context, {required bool isVisible}) {
     final cs = Theme.of(context).colorScheme;
@@ -2534,8 +2421,7 @@ class _MyHomePageState extends State<MyHomePage> {
       );
     }
 
-    return _wrapWithAuroraBackground(
-      child: Scrollbar(
+    return Scrollbar(
         controller: _scrollController,
         interactive: true,
         child: CustomScrollView(
@@ -3665,8 +3551,7 @@ class _MyHomePageState extends State<MyHomePage> {
             buildBottomBarsGutter(context),
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildAlbumArtistsTab(BuildContext context) {
@@ -3691,8 +3576,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     final cs = Theme.of(context).colorScheme;
 
-    return _wrapWithAuroraBackground(
-      child: Scrollbar(
+    return Scrollbar(
         child: CustomScrollView(
           slivers: [
             SliverAppBar.large(
@@ -3864,8 +3748,7 @@ class _MyHomePageState extends State<MyHomePage> {
             buildBottomBarsGutter(context),
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildAlbumsTab(BuildContext context) {
@@ -3896,8 +3779,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     final cs = Theme.of(context).colorScheme;
 
-    return _wrapWithAuroraBackground(
-      child: Scrollbar(
+    return Scrollbar(
         child: CustomScrollView(
           slivers: [
             SliverAppBar.large(
@@ -4100,8 +3982,7 @@ class _MyHomePageState extends State<MyHomePage> {
             buildBottomBarsGutter(context),
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildPlaylistsTab(BuildContext context) {
@@ -4262,8 +4143,7 @@ class _MyHomePageState extends State<MyHomePage> {
     final recentlyPlayedCount = recentlyPlayedList.length;
     final recentlyAddedCount = recentlyAddedList.length;
 
-    return _wrapWithAuroraBackground(
-      child: CustomScrollView(
+    return CustomScrollView(
         slivers: [
           SliverAppBar.large(
             title: const Text('Playlists'),
@@ -4495,8 +4375,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           buildBottomBarsGutter(context),
         ],
-      ),
-    );
+      );
   }
 
   Future<void> _openNowPlaying(SongModel song) async {
