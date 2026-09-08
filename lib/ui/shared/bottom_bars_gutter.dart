@@ -18,23 +18,10 @@ Widget buildBottomBarsGutter(
   bool includeMiniPlayer = true,
   double extraPadding = 0,
 }) {
-  // NavigationBar reserve: 80px M3 NavigationBar + 16px bottom breathing clearance.
-  const double navBarReserve = 96;
-  // MiniPlayer reserve: 80px card + 6px bottom margin + 8px dynamic inset buffer + 16px clearance.
-  const double miniPlayerReserve = 110;
-  final double bottomInset = MediaQuery.of(context).padding.bottom;
+  // Gutter space matches the standard height of a card across the app (80px).
+  const double cardHeight = 80.0;
   return SliverToBoxAdapter(
-    child: ValueListenableBuilder<int?>(
-      valueListenable: playbackController.currentSongIdNotifier,
-      builder: (context, songId, _) {
-        final double gutter =
-            bottomInset +
-            navBarReserve +
-            (includeMiniPlayer && songId != null ? miniPlayerReserve : 0) +
-            extraPadding;
-        return SizedBox(height: gutter);
-      },
-    ),
+    child: SizedBox(height: cardHeight + extraPadding),
   );
 }
 
