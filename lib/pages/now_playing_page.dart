@@ -33,6 +33,15 @@ class NowPlayingPage extends StatefulWidget {
   final void Function(SongModel song) onOpenAlbum;
   final void Function(SongModel song) onOpenArtist;
   final ValueChanged<SongModel>? onSongUpdated;
+
+  static final LinkedHashMap<
+    int,
+    ({Color primary, Color secondary, Color tertiary})
+  >
+  paletteCache =
+      LinkedHashMap<int, ({Color primary, Color secondary, Color tertiary})>();
+  static const int paletteCacheMax = 30;
+
   const NowPlayingPage({
     super.key,
     required this.player,
@@ -50,13 +59,6 @@ class NowPlayingPage extends StatefulWidget {
 
 class _NowPlayingPageState extends State<NowPlayingPage>
     with TickerProviderStateMixin {
-  static final LinkedHashMap<
-    int,
-    ({Color primary, Color secondary, Color tertiary})
-  >
-  _paletteCache =
-      LinkedHashMap<int, ({Color primary, Color secondary, Color tertiary})>();
-  static const int _paletteCacheMax = 30;
 
   final ItemScrollController _lyricItemScrollController =
       ItemScrollController();
@@ -150,6 +152,13 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   void initState() {
     super.initState();
     _displayedSong = widget.song;
+    final cachedPalette = NowPlayingPage.paletteCache[_displayedSong.id];
+    if (cachedPalette != null) {
+      _primaryColor = cachedPalette.primary;
+      _secondaryColor = cachedPalette.secondary;
+      _tertiaryColor = cachedPalette.tertiary;
+    }
+
     final initialEffective = _getEffectiveIndices();
     final initialPage = _pageForSequenceIndex(
       widget.player.currentIndex ?? 0,
@@ -209,11 +218,12 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
     _loadLyrics();
     _scheduleArtworkBytesUpdate(_displayedSong.id, delay: Duration.zero);
-    // Delay palette extraction until slide animation completes.
-    _schedulePaletteUpdate(
-      _displayedSong.id,
-      delay: const Duration(milliseconds: 350),
-    );
+    if (cachedPalette == null) {
+      _schedulePaletteUpdate(
+        _displayedSong.id,
+        delay: Duration.zero,
+      );
+    }
 
     _indexSub = widget.player.currentIndexStream.listen((index) {
       if (!mounted) return;
@@ -705,10 +715,10 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   Future<void> _updatePalette(int songId, int token) async {
     try {
-      final cached = _paletteCache.remove(songId);
+      final cached = NowPlayingPage.paletteCache.remove(songId);
       if (cached != null) {
         // LRU: re-insert as most recently used.
-        _paletteCache[songId] = cached;
+        NowPlayingPage.paletteCache[songId] = cached;
         if (!mounted) return;
         if (token != _paletteToken) return;
         if (songId != _displayedSong.id) return;
@@ -774,14 +784,17 @@ class _NowPlayingPageState extends State<NowPlayingPage>
           tertiary: tertiary,
         );
 
-        _paletteCache.remove(songId);
-        _paletteCache[songId] = (
+        NowPlayingPage.paletteCache.remove(songId);
+        NowPlayingPage.paletteCache[songId] = (
           primary: primary,
           secondary: secondary,
           tertiary: tertiary,
         );
-        while (_paletteCache.length > _paletteCacheMax) {
-          _paletteCache.remove(_paletteCache.keys.first);
+        while (NowPlayingPage.paletteCache.length >
+            NowPlayingPage.paletteCacheMax) {
+          NowPlayingPage.paletteCache.remove(
+            NowPlayingPage.paletteCache.keys.first,
+          );
         }
       } catch (_) {
         // Swallow errors; palette is a nicety, not critical.
@@ -1192,11 +1205,20 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       }
     }
 
-    // If there's no artwork, lean into Material You (wallpaper) colors.
-    final defaultTopColor = cs.primaryContainer;
-    final defaultMidColor = cs.tertiaryContainer;
+    // Deep, elegant fallback colors if artwork colors aren't available yet
+    final defaultTopColor = isDark
+        ? Color.alphaBlend(
+            cs.primary.withValues(alpha: 0.08),
+            const Color(0xFF141519),
+          )
+        : cs.surfaceContainerHighest;
+    final defaultMidColor = isDark
+        ? const Color(0xFF0F1014)
+        : cs.surfaceContainer;
     final defaultAccentColor = cs.primary;
-    final defaultBottomColor = cs.surface;
+    final defaultBottomColor = isDark
+        ? const Color(0xFF0C0D10)
+        : cs.surface;
 
     final targetTopColor = _primaryColor != null
         ? adjustColorForTheme(_primaryColor!)
@@ -1242,7 +1264,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       child: Transform.translate(
         offset: Offset(0, _dragOffset),
         child: Scaffold(
-          backgroundColor: Colors.transparent,
+          backgroundColor: isDark ? const Color(0xFF101116) : cs.surface,
           body: TweenAnimationBuilder<Color?>(
             duration: const Duration(milliseconds: 600),
             curve: Curves.easeOut,
@@ -1325,8 +1347,8 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  c1.withValues(alpha: 0.8),
-                                  c3.withValues(alpha: 0.8),
+                                  c1,
+                                  c3,
                                 ],
                               ),
                             ),

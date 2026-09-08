@@ -1610,8 +1610,8 @@ class AppStateController extends ChangeNotifier {
           barrierDismissible: false,
           barrierColor: Colors.transparent,
           barrierLabel: 'Now Playing',
-          transitionDuration: const Duration(milliseconds: 400),
-          reverseTransitionDuration: const Duration(milliseconds: 350),
+          transitionDuration: const Duration(milliseconds: 350),
+          reverseTransitionDuration: const Duration(milliseconds: 300),
           pageBuilder: (_, __, ___) => NowPlayingPage(
             player: _controller.player,
             song: song,
@@ -1624,12 +1624,15 @@ class AppStateController extends ChangeNotifier {
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             final curve = CurveTween(curve: Curves.easeOutCubic);
+            final slide = Tween<Offset>(
+              begin: const Offset(0.0, 1.0),
+              end: Offset.zero,
+            ).chain(curve);
             final fade = Tween<double>(begin: 0.0, end: 1.0).chain(curve);
-            final scale = Tween<double>(begin: 0.95, end: 1.0).chain(curve);
-            return FadeTransition(
-              opacity: animation.drive(fade),
-              child: ScaleTransition(
-                scale: animation.drive(scale),
+            return SlideTransition(
+              position: animation.drive(slide),
+              child: FadeTransition(
+                opacity: animation.drive(fade),
                 child: child,
               ),
             );

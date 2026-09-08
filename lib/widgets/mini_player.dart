@@ -14,6 +14,7 @@ import 'package:palette_generator/palette_generator.dart';
 
 import '../android_notifications.dart';
 import '../main.dart';
+import '../pages/now_playing_page.dart';
 import '../pages/queue_page.dart';
 import '../services/playback_controller.dart';
 import '../ui/shared/fast_artwork_widget.dart';
@@ -270,6 +271,30 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
       _bgColorCache[songId] = baseColor;
       while (_bgColorCache.length > _bgColorCacheMax) {
         _bgColorCache.remove(_bgColorCache.keys.first);
+      }
+
+      final primary = palette.darkVibrantColor?.color ??
+          palette.vibrantColor?.color ??
+          palette.dominantColor?.color ??
+          baseColor;
+      final secondary = palette.vibrantColor?.color ??
+          palette.mutedColor?.color ??
+          primary;
+      final tertiary = palette.lightVibrantColor?.color ??
+          palette.darkMutedColor?.color ??
+          secondary;
+
+      NowPlayingPage.paletteCache.remove(songId);
+      NowPlayingPage.paletteCache[songId] = (
+        primary: primary,
+        secondary: secondary,
+        tertiary: tertiary,
+      );
+      while (NowPlayingPage.paletteCache.length >
+          NowPlayingPage.paletteCacheMax) {
+        NowPlayingPage.paletteCache.remove(
+          NowPlayingPage.paletteCache.keys.first,
+        );
       }
 
       setState(() => _bgColor = baseColor);
