@@ -102,6 +102,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   StreamSubscription<bool>? _shuffleSub;
   StreamSubscription<List<int>>? _shuffleIndicesSub;
   bool _isProgrammaticPageChange = false;
+  int? _userSwipedToPage;
 
   bool _disableMotion = false;
   bool _fullscreenLandscape = false;
@@ -125,18 +126,24 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   void _syncPageController(int targetPage) {
     if (_pageController.hasClients) {
-      final currentPage = _pageController.page?.round() ?? -1;
+      final page = _pageController.page;
+      if (page != null && (page - targetPage).abs() < 0.05) {
+        return;
+      }
+      final currentPage = page?.round() ?? -1;
       if (currentPage != targetPage) {
         _isProgrammaticPageChange = true;
         final isAdjacent = (currentPage - targetPage).abs() == 1;
         if (isAdjacent) {
-          _pageController.animateToPage(
-            targetPage,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-          ).whenComplete(() {
-            _isProgrammaticPageChange = false;
-          });
+          _pageController
+              .animateToPage(
+                targetPage,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+              )
+              .whenComplete(() {
+                _isProgrammaticPageChange = false;
+              });
         } else {
           _pageController.jumpToPage(targetPage);
           _isProgrammaticPageChange = false;
@@ -259,7 +266,14 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
       final effective = _getEffectiveIndices();
       final targetPage = _pageForSequenceIndex(index, effective);
-      _syncPageController(targetPage);
+      if (_userSwipedToPage == targetPage) {
+        // Handled smoothly by PageView's ongoing drag/ballistic scroll;
+        // avoid launching a competing programmatic animation.
+        _userSwipedToPage = null;
+      } else {
+        _userSwipedToPage = null;
+        _syncPageController(targetPage);
+      }
 
       final hasHighRes = hasCachedArtworkBytes(newSong.id, size: 900);
       final hasLowRes = hasCachedArtworkBytes(newSong.id, size: 200);
@@ -1294,28 +1308,45 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                         animation: _bgGradientController,
                         builder: (context, _) {
                           final size = MediaQuery.of(context).size;
-                          final maxDim = math.max(size.width, size.height);
-                          final blobSize = maxDim * 1.2;
+                          final isLandscape = size.width > size.height;
+                          final baseBlobSize =
+                              (isLandscape ? size.height : size.width) * 1.35;
 
                           final t = _bgGradientController.value;
 
-                          // Lissajous curve paths mapped to [0, 1] for Positioned
-                          final x1 = (math.sin(t * math.pi * 2) + 1) / 2;
-                          final y1 = (math.cos(t * math.pi * 4) + 1) / 2;
+                          // Orientation-aware paths ensuring animation stays balanced and visible on screen
+                          final double x1, y1, x2, y2, x3, y3, x4, y4;
+                          if (isLandscape) {
+                            // Landscape: Blob 1 moves across left (artwork side),
+                            // Blob 2 moves across right (controls/lyrics side),
+                            // Blobs 3 and 4 blend center & roam across screen
+                            x1 = 0.12 + 0.32 * ((math.sin(t * math.pi * 2) + 1) / 2);
+                            y1 = 0.20 + 0.60 * ((math.cos(t * math.pi * 2) + 1) / 2);
 
-                          final x2 =
-                              (math.cos(t * math.pi * 2 + math.pi) + 1) / 2;
-                          final y2 = (math.sin(t * math.pi * 6) + 1) / 2;
+                            x2 = 0.56 + 0.34 * ((math.cos(t * math.pi * 2 + math.pi) + 1) / 2);
+                            y2 = 0.20 + 0.60 * ((math.sin(t * math.pi * 4) + 1) / 2);
 
-                          final x3 =
-                              (math.sin(t * math.pi * 4 + math.pi / 4) + 1) / 2;
-                          final y3 =
-                              (math.cos(t * math.pi * 2 + math.pi / 4) + 1) / 2;
+                            x3 = 0.28 + 0.44 * ((math.sin(t * math.pi * 4 + math.pi / 4) + 1) / 2);
+                            y3 = 0.15 + 0.70 * ((math.cos(t * math.pi * 2 + math.pi / 4) + 1) / 2);
 
-                          final x4 =
-                              (math.cos(t * math.pi * 2 + math.pi / 2) + 1) / 2;
-                          final y4 =
-                              (math.sin(t * math.pi * 4 + math.pi / 2) + 1) / 2;
+                            x4 = 0.15 + 0.70 * ((math.cos(t * math.pi * 2 + math.pi / 2) + 1) / 2);
+                            y4 = 0.25 + 0.50 * ((math.sin(t * math.pi * 2 + math.pi / 2) + 1) / 2);
+                          } else {
+                            // Portrait: Blob 1 roams around upper-middle (artwork),
+                            // Blob 2 roams around lower section (controls),
+                            // Blobs 3 and 4 roam diagonally and mid-screen
+                            x1 = 0.20 + 0.60 * ((math.sin(t * math.pi * 2) + 1) / 2);
+                            y1 = 0.12 + 0.34 * ((math.cos(t * math.pi * 2) + 1) / 2);
+
+                            x2 = 0.20 + 0.60 * ((math.cos(t * math.pi * 2 + math.pi) + 1) / 2);
+                            y2 = 0.55 + 0.35 * ((math.sin(t * math.pi * 4) + 1) / 2);
+
+                            x3 = 0.10 + 0.55 * ((math.sin(t * math.pi * 4 + math.pi / 4) + 1) / 2);
+                            y3 = 0.30 + 0.42 * ((math.cos(t * math.pi * 2 + math.pi / 4) + 1) / 2);
+
+                            x4 = 0.35 + 0.55 * ((math.cos(t * math.pi * 2 + math.pi / 2) + 1) / 2);
+                            y4 = 0.25 + 0.45 * ((math.sin(t * math.pi * 2 + math.pi / 2) + 1) / 2);
+                          }
 
                           Widget buildBlob(
                             double xOffset,
@@ -1323,24 +1354,25 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                             Color color,
                             double scale,
                           ) {
+                            final effectiveBlobSize = baseBlobSize * scale;
                             return Positioned(
                               left:
-                                  xOffset * size.width - (blobSize * scale) / 2,
+                                  xOffset * size.width - effectiveBlobSize / 2,
                               top:
-                                  yOffset * size.height -
-                                  (blobSize * scale) / 2,
+                                  yOffset * size.height - effectiveBlobSize / 2,
                               child: Container(
-                                width: blobSize * scale,
-                                height: blobSize * scale,
+                                width: effectiveBlobSize,
+                                height: effectiveBlobSize,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   gradient: RadialGradient(
                                     colors: [
-                                      color.withValues(alpha: 1.0),
-                                      color.withValues(alpha: 0.75),
+                                      color.withValues(alpha: 0.90),
+                                      color.withValues(alpha: 0.55),
+                                      color.withValues(alpha: 0.20),
                                       color.withValues(alpha: 0.0),
                                     ],
-                                    stops: const [0.0, 0.45, 1.0],
+                                    stops: const [0.0, 0.35, 0.70, 1.0],
                                   ),
                                 ),
                               ),
@@ -1350,8 +1382,12 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                           final gradientLayer = DecoratedBox(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
+                                begin: isLandscape
+                                    ? Alignment.centerLeft
+                                    : Alignment.topCenter,
+                                end: isLandscape
+                                    ? Alignment.centerRight
+                                    : Alignment.bottomCenter,
                                 colors: [
                                   c1,
                                   c3,
@@ -1361,15 +1397,10 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                buildBlob(x1, y1 * 0.5, c1, 1.4),
-                                buildBlob(x2, (y2 * 0.5) + 0.5, c2, 1.5),
-                                buildBlob(x3, y3, c3, 1.3),
-                                buildBlob(
-                                  x4,
-                                  (y4 * 0.3) + 0.7,
-                                  c2,
-                                  1.6,
-                                ), // Bottom coverage
+                                buildBlob(x1, y1, c1, 1.25),
+                                buildBlob(x2, y2, c2, 1.30),
+                                buildBlob(x3, y3, c3, 1.15),
+                                buildBlob(x4, y4, c2, 1.35),
                               ],
                             ),
                           );
@@ -2034,6 +2065,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       onPageChanged: (page) {
         if (_isProgrammaticPageChange) return;
         if (page < 0 || page >= effective.length) return;
+        _userSwipedToPage = page;
         final targetSeqIndex = effective[page];
         if (targetSeqIndex != widget.player.currentIndex) {
           widget.player.seek(Duration.zero, index: targetSeqIndex);
