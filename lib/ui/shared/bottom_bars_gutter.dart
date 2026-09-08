@@ -93,14 +93,14 @@ Widget buildDetailBottomBars({
                     label: 'Home',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.people_outline_rounded),
-                    selectedIcon: Icon(Icons.people_rounded),
-                    label: 'Album Artists',
-                  ),
-                  NavigationDestination(
                     icon: Icon(Icons.album_outlined),
                     selectedIcon: Icon(Icons.album_rounded),
                     label: 'Albums',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.people_outline_rounded),
+                    selectedIcon: Icon(Icons.people_rounded),
+                    label: 'Album Artists',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.queue_music_outlined),
