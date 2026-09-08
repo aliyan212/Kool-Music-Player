@@ -97,18 +97,66 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   late PageController _pageController;
   StreamSubscription<PlayerState>? _nowPlayingPlayerStateSub;
   StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<bool>? _shuffleSub;
+  StreamSubscription<List<int>>? _shuffleIndicesSub;
+  bool _isProgrammaticPageChange = false;
 
   bool _disableMotion = false;
   bool _fullscreenLandscape = false;
   bool _fullscreenControlsVisible = false;
   double _dragOffset = 0.0;
 
+  List<int> _getEffectiveIndices() {
+    if (widget.player.shuffleModeEnabled) {
+      final sh = widget.player.shuffleIndices;
+      if (sh.isNotEmpty) return sh;
+    }
+    final seqLen = widget.player.sequence.length;
+    return List.generate(seqLen, (i) => i);
+  }
+
+  int _pageForSequenceIndex(int seqIndex, List<int> effectiveIndices) {
+    if (effectiveIndices.isEmpty) return 0;
+    final pos = effectiveIndices.indexOf(seqIndex);
+    return pos >= 0 ? pos : seqIndex.clamp(0, effectiveIndices.length - 1);
+  }
+
+  void _syncPageController(int targetPage) {
+    if (_pageController.hasClients) {
+      final currentPage = _pageController.page?.round() ?? -1;
+      if (currentPage != targetPage) {
+        _isProgrammaticPageChange = true;
+        final isAdjacent = (currentPage - targetPage).abs() == 1;
+        if (isAdjacent) {
+          _pageController.animateToPage(
+            targetPage,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+          ).whenComplete(() {
+            _isProgrammaticPageChange = false;
+          });
+        } else {
+          _pageController.jumpToPage(targetPage);
+          _isProgrammaticPageChange = false;
+        }
+      }
+    } else {
+      _pageController.dispose();
+      _pageController = PageController(initialPage: targetPage);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _displayedSong = widget.song;
+    final initialEffective = _getEffectiveIndices();
+    final initialPage = _pageForSequenceIndex(
+      widget.player.currentIndex ?? 0,
+      initialEffective,
+    );
     _pageController = PageController(
-      initialPage: widget.player.currentIndex ?? 0,
+      initialPage: initialPage,
     );
     if (hasCachedArtworkBytes(_displayedSong.id, size: 900)) {
       _displayedArtworkBytes = peekCachedArtworkBytes(
@@ -194,19 +242,9 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
       if (newSong == null || newSong.id == _displayedSong.id) return;
 
-      if (_pageController.hasClients &&
-          _pageController.page?.round() != index) {
-        _pageController.animateToPage(
-          index,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-        );
-      } else if (!_pageController.hasClients) {
-        // If lyrics were showing, the PageView is unmounted and has no clients.
-        // We must recreate the controller with the new index so it remounts at the right page!
-        _pageController.dispose();
-        _pageController = PageController(initialPage: index);
-      }
+      final effective = _getEffectiveIndices();
+      final targetPage = _pageForSequenceIndex(index, effective);
+      _syncPageController(targetPage);
 
       final hasHighRes = hasCachedArtworkBytes(newSong.id, size: 900);
       final hasLowRes = hasCachedArtworkBytes(newSong.id, size: 200);
@@ -237,6 +275,28 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       _scheduleArtworkBytesUpdate(newSong.id);
       _schedulePaletteUpdate(newSong.id);
       _loadLyrics();
+    });
+
+    _shuffleSub = widget.player.shuffleModeEnabledStream.listen((_) {
+      if (!mounted) return;
+      final effective = _getEffectiveIndices();
+      final targetPage = _pageForSequenceIndex(
+        widget.player.currentIndex ?? 0,
+        effective,
+      );
+      _syncPageController(targetPage);
+      setState(() {});
+    });
+
+    _shuffleIndicesSub = widget.player.shuffleIndicesStream.listen((_) {
+      if (!mounted) return;
+      final effective = _getEffectiveIndices();
+      final targetPage = _pageForSequenceIndex(
+        widget.player.currentIndex ?? 0,
+        effective,
+      );
+      _syncPageController(targetPage);
+      setState(() {});
     });
 
     _positionSub = widget.player.positionStream.listen((position) {
@@ -300,6 +360,8 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     _positionSub = null;
 
     _indexSub?.cancel();
+    _shuffleSub?.cancel();
+    _shuffleIndicesSub?.cancel();
     _resumeAutoScrollTimer?.cancel();
     _paletteDebounceTimer?.cancel();
     _paletteDebounceTimer = null;
@@ -1929,16 +1991,29 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       return _buildNowPlayingArtwork(side: side);
     }
 
+    final effective = _getEffectiveIndices();
+    final itemCount = effective.length;
+
     return PageView.builder(
       controller: _pageController,
-      itemCount: sequence.length,
-      onPageChanged: (index) {
-        if (index != widget.player.currentIndex) {
-          widget.player.seek(Duration.zero, index: index);
+      itemCount: itemCount,
+      onPageChanged: (page) {
+        if (_isProgrammaticPageChange) return;
+        if (page < 0 || page >= effective.length) return;
+        final targetSeqIndex = effective[page];
+        if (targetSeqIndex != widget.player.currentIndex) {
+          widget.player.seek(Duration.zero, index: targetSeqIndex);
         }
       },
-      itemBuilder: (context, index) {
-        final currentSource = sequence[index];
+      itemBuilder: (context, page) {
+        if (page < 0 || page >= effective.length) {
+          return _buildNowPlayingArtwork(side: side);
+        }
+        final seqIndex = effective[page];
+        if (seqIndex < 0 || seqIndex >= sequence.length) {
+          return _buildNowPlayingArtwork(side: side);
+        }
+        final currentSource = sequence[seqIndex];
         final tag = currentSource.tag;
 
         int? songId;

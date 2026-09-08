@@ -41,6 +41,7 @@ class _QueuePageState extends State<QueuePage> {
   late final Map<int, SongModel> _songById;
   StreamSubscription<SequenceState?>? _sequenceSub;
   StreamSubscription<bool>? _shuffleSub;
+  StreamSubscription<List<int>>? _shuffleIndicesSub;
   bool _isReordering = false;
   bool _ignoreSequenceUpdates = false;
   bool _shuffleEnabled = false;
@@ -107,7 +108,7 @@ class _QueuePageState extends State<QueuePage> {
     _songById = {for (final s in widget.songs) s.id: s};
 
     _shuffleEnabled = widget.player.shuffleModeEnabled;
-    _shuffleIndices = widget.player.shuffleIndices ?? [];
+    _shuffleIndices = widget.player.shuffleIndices;
 
     final initialSequence = widget.player.sequence;
     if (initialSequence.isNotEmpty) {
@@ -161,8 +162,17 @@ class _QueuePageState extends State<QueuePage> {
       if (!mounted) return;
       setState(() {
         _shuffleEnabled = enabled;
-        _shuffleIndices = widget.player.shuffleIndices ?? [];
+        _shuffleIndices = widget.player.shuffleIndices;
       });
+    });
+
+    _shuffleIndicesSub = widget.player.shuffleIndicesStream.listen((indices) {
+      if (!mounted) return;
+      if (!_sameIntList(_shuffleIndices, indices)) {
+        setState(() {
+          _shuffleIndices = indices;
+        });
+      }
     });
   }
 
@@ -170,6 +180,7 @@ class _QueuePageState extends State<QueuePage> {
   void dispose() {
     _sequenceSub?.cancel();
     _shuffleSub?.cancel();
+    _shuffleIndicesSub?.cancel();
     super.dispose();
   }
 
