@@ -47,7 +47,7 @@ class _BootAppState extends State<BootApp> {
               builder: () => AppAudioHandler(playbackController.player),
               config: const AudioServiceConfig(
                 androidNotificationChannelId:
-                    'com.example.music_player.channel.audio',
+                    'com.example.music_player.channel.audio.v2',
                 androidNotificationChannelName: 'Music playback',
                 androidNotificationOngoing: true,
                 androidStopForegroundOnPause: true,

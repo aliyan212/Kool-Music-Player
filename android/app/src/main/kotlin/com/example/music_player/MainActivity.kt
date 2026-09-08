@@ -18,6 +18,30 @@ class MainActivity : AudioServiceActivity() {
 	override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
 		super.configureFlutterEngine(flutterEngine)
 
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			val nm = getSystemService(android.app.NotificationManager::class.java)
+			try {
+				nm?.deleteNotificationChannel("com.example.music_player.channel.audio")
+			} catch (_: Exception) {}
+
+			val channelId = "com.example.music_player.channel.audio.v2"
+			val existing = nm?.getNotificationChannel(channelId)
+			if (existing == null) {
+				val channel = android.app.NotificationChannel(
+					channelId,
+					"Music playback",
+					android.app.NotificationManager.IMPORTANCE_LOW
+				).apply {
+					description = "Playback controls and track information"
+					setShowBadge(false)
+					setSound(null, null)
+					enableVibration(false)
+					vibrationPattern = null
+				}
+				nm?.createNotificationChannel(channel)
+			}
+		}
+
 		MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
 			when (call.method) {
 				"areNotificationsEnabled" -> {

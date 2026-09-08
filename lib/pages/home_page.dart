@@ -6,7 +6,6 @@ import 'package:permission_handler/permission_handler.dart';
 import '../services/app_state_controller.dart';
 import '../services/playback_controller.dart';
 import '../ui/shared/bottom_bars_gutter.dart';
-import '../services/playback_controller.dart';
 import 'tabs/album_artists_tab.dart';
 import 'tabs/albums_tab.dart';
 import 'tabs/library_tab.dart';
@@ -23,9 +22,6 @@ class _MyHomePageState extends State<MyHomePage> {
   final AppStateController _appState = AppStateController.instance;
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<bool> _showSearchInAppBar = ValueNotifier<bool>(false);
-
-  double _bottomBarScrollAccumulator = 0;
-  double? _lastScrollPixels;
 
   @override
   void initState() {
@@ -56,77 +52,16 @@ class _MyHomePageState extends State<MyHomePage> {
       FocusManager.instance.primaryFocus?.unfocus();
     }
   }
-  void _setHideBottomBars(bool hide) {
-    if (_appState.hideBottomBars == hide) return;
-    _appState.hideBottomBars = hide;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _appState.notifyListeners();
-    });
-  }
-
-
-  bool _onScrollNotification(ScrollNotification n) {
-    if (!mounted) return false;
-    if (n.metrics.axis != Axis.vertical) return false;
-
-    if (n.metrics.pixels <= (n.metrics.minScrollExtent + 16)) {
-      _bottomBarScrollAccumulator = 0;
-      _setHideBottomBars(false);
-      return false;
-    }
-
-    if (n is ScrollStartNotification) {
-      _lastScrollPixels = n.metrics.pixels;
-      _bottomBarScrollAccumulator = 0;
-      return false;
-    }
-
-    if (n is ScrollEndNotification) {
-      _bottomBarScrollAccumulator = 0;
-      _lastScrollPixels = n.metrics.pixels;
-      return false;
-    }
-
-    if (n is! ScrollUpdateNotification) return false;
-
-    final delta =
-        n.scrollDelta ??
-        (_lastScrollPixels == null ? 0 : n.metrics.pixels - _lastScrollPixels!);
-    _lastScrollPixels = n.metrics.pixels;
-
-    if (delta.abs() < 0.5) return false;
-
-    if (_bottomBarScrollAccumulator == 0 ||
-        (_bottomBarScrollAccumulator > 0) != (delta > 0)) {
-      _bottomBarScrollAccumulator = delta;
-    } else {
-      _bottomBarScrollAccumulator += delta;
-    }
-
-    const hideThreshold = 28.0;
-    const showThreshold = 20.0;
-
-    if (_bottomBarScrollAccumulator > hideThreshold) {
-      _bottomBarScrollAccumulator = 0;
-      _setHideBottomBars(true);
-    } else if (_bottomBarScrollAccumulator < -showThreshold) {
-      _bottomBarScrollAccumulator = 0;
-      _setHideBottomBars(false);
-    }
-
-    return false;
-  }
 
   Widget _animatedBottomBars() {
     return AnimatedSlide(
-      offset: (_appState.hideBottomBars || _appState.isSelectionMode) ? const Offset(0, 1) : Offset.zero,
+      offset: _appState.isSelectionMode ? const Offset(0, 1) : Offset.zero,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
       child: AnimatedOpacity(
-        opacity: (_appState.hideBottomBars || _appState.isSelectionMode) ? 0.0 : 1.0,
+        opacity: _appState.isSelectionMode ? 0.0 : 1.0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
-        
         child: buildDetailBottomBars(
           context: context,
           player: playbackController.player,
@@ -141,7 +76,6 @@ class _MyHomePageState extends State<MyHomePage> {
             _appState.notifyListeners();
           },
         ),
-
       ),
     );
   }
@@ -165,19 +99,17 @@ class _MyHomePageState extends State<MyHomePage> {
       child: Scaffold(
         extendBody: true,
         bottomNavigationBar: _animatedBottomBars(),
-        body: NotificationListener<ScrollNotification>(
-          onNotification: _onScrollNotification,
-          child: _appState.permissionState != LibraryPermissionState.granted
-              ? (_appState.permissionState == LibraryPermissionState.unknown
-                    ? const Center(child: CircularProgressIndicator())
-                    : _LibraryPermissionGate(
-                        state: _appState.permissionState,
-                        onGrant: () => _appState.ensureLibraryPermissionAndLoad(
-                          fromUserAction: true,
-                        ),
-                        onOpenSettings: openAppSettings,
-                      ))
-              : _appState.isLoading
+        body: _appState.permissionState != LibraryPermissionState.granted
+            ? (_appState.permissionState == LibraryPermissionState.unknown
+                  ? const Center(child: CircularProgressIndicator())
+                  : _LibraryPermissionGate(
+                      state: _appState.permissionState,
+                      onGrant: () => _appState.ensureLibraryPermissionAndLoad(
+                        fromUserAction: true,
+                      ),
+                      onOpenSettings: openAppSettings,
+                    ))
+            : _appState.isLoading
               ? const Center(child: CircularProgressIndicator())
               : Stack(
                   fit: StackFit.expand,
@@ -214,7 +146,6 @@ class _MyHomePageState extends State<MyHomePage> {
                       _appState.inlineDetailContent!,
                   ],
                 ),
-        ),
       ),
     );
   }

@@ -55,7 +55,7 @@ Future<bool> ensureNotificationPermissionIfNeeded() async {
   if (kIsWeb) return true;
   if (defaultTargetPlatform != TargetPlatform.android) return true;
 
-  const audioChannelId = 'com.example.music_player.channel.audio';
+  const audioChannelId = 'com.example.music_player.channel.audio.v2';
 
   final status = await Permission.notification.status;
   if (status.isGranted || status.isLimited) return true;

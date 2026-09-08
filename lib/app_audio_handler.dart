@@ -147,16 +147,17 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   Future<void> _recoverFromStuckPlaybackIfNeeded() async {
     if (!player.playing) return;
+    if (player.processingState != ProcessingState.ready) return;
 
     final lastProgressAt = _lastPlaybackProgressAt;
     if (lastProgressAt == null) return;
 
     final now = DateTime.now();
-    if (now.difference(lastProgressAt) < const Duration(seconds: 6)) return;
+    if (now.difference(lastProgressAt) < const Duration(seconds: 15)) return;
 
     final lastRecoveryAt = _lastPlaybackRecoveryAt;
     if (lastRecoveryAt != null &&
-        now.difference(lastRecoveryAt) < const Duration(seconds: 10)) {
+        now.difference(lastRecoveryAt) < const Duration(seconds: 30)) {
       return;
     }
 
