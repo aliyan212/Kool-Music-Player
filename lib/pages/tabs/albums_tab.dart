@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../services/app_state_controller.dart';
+import '../../services/playback_controller.dart';
+import '../../main.dart';
 import '../../data/models/album_stat.dart';
 import '../../data/models/sort_mode.dart';
 import '../../utils/format_utils.dart';
@@ -6,21 +10,16 @@ import '../../ui/shared/fast_artwork_widget.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 class AlbumsTab extends StatelessWidget {
-  final List<AlbumTabStat> cachedAlbums;
-  final AlbumsSort albumsSort;
-  final Function(AlbumsSort) onSortChanged;
-  final Function(SongModel) onOpenAlbumPageFromSong;
-
-  const AlbumsTab({
-    super.key,
-    required this.cachedAlbums,
-    required this.albumsSort,
-    required this.onSortChanged,
-    required this.onOpenAlbumPageFromSong,
-  });
+  const AlbumsTab({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final appState = AppStateController.instance;
+    final controller = playbackController;
+    final cachedAlbums = appState.cachedAlbums;
+    final cachedAlbumArtists = appState.cachedAlbumArtists;
+    final albumsSort = appState.albumsSort;
+
   
     final albums = cachedAlbums;
 
@@ -71,10 +70,7 @@ class AlbumsTab extends StatelessWidget {
                   initialValue: albumsSort,
                   onSelected: (mode) {
                     HapticFeedback.selectionClick();
-                    setState(() {
-                      onSortChanged(mode);
-                      
-                    });
+                    appState.applyAlbumsSort(mode);
                   },
                   itemBuilder: (context) => const [
                     PopupMenuItem(
@@ -171,7 +167,7 @@ class AlbumsTab extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                           onTap: () {
                             HapticFeedback.selectionClick();
-                            onOpenAlbumPageFromSong(song);
+                            appState.openAlbumPageFromSong(song);
                           },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -249,7 +245,7 @@ class AlbumsTab extends StatelessWidget {
                   );
                 }, childCount: albums.length),
               ),
-            buildBottomBarsGutter(context),
+            const SliverToBoxAdapter(child: SizedBox(height: 80)),
           ],
         ),
       );

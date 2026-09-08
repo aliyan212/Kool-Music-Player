@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 
 import 'dart:async';
 import 'dart:collection';
@@ -280,7 +281,7 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
       context,
       PageRouteBuilder(
         opaque: false,
-        pageBuilder: (_, __, ___) => QueuePage(
+        pageBuilder: (context, animation, secondaryAnimation) => QueuePage(
           player: widget.controller.player,
           songs: widget.songs,
           currentIndex: widget.controller.currentIndex ?? 0,
@@ -338,7 +339,6 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
     final luminance = bgColor.computeLuminance();
     final textColor = luminance > 0.5 ? Colors.black87 : Colors.white;
     final subTextColor = luminance > 0.5 ? Colors.black54 : Colors.white70;
-    final borderColor = Colors.transparent;
 
     return GestureDetector(
       onVerticalDragEnd: (details) {

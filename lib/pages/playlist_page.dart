@@ -13,7 +13,7 @@ import '../utils/palette_compute.dart';
 import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/format_utils.dart';
 import '../utils/song_sort_utils.dart';
-import '../main.dart';
+import '../ui/shared/bottom_bars_gutter.dart';
 
 enum PlaylistSort { manual, artist, albumArtist, year, albumArtistYear }
 class SmartPlaylistPage extends StatelessWidget {

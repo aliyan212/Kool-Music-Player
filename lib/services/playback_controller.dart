@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'dart:async';
 import 'dart:convert';
 
@@ -436,7 +437,6 @@ class PlaybackController {
           if (tc != 0) return tc;
           return _cs(a.title, b.title);
         case SortMode.albumArtistYear:
-        default:
           final ac = _cs(_albumArtistFor(a), _albumArtistFor(b));
           if (ac != 0) return ac;
 
@@ -628,10 +628,6 @@ class PlaybackController {
     return int.tryParse(match.group(0)!) ?? 0;
   }
 
-  int _yearForCompare(SongModel s) {
-    final y = _yearFromSong(s);
-    return y == 0 ? 99999 : y;
-  }
 
   String _albumArtistFor(SongModel s) {
     final raw = s.getMap['album_artist']?.toString();

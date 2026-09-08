@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:ui' show lerpDouble;
+import '../../pages/playlist_page.dart';
+import '../../services/app_state_controller.dart';
+import '../../ui/shared/bottom_bars_gutter.dart';
 import '../../data/models/user_playlist.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import '../../services/playback_controller.dart';
@@ -6,52 +11,22 @@ import '../../ui/shared/fast_artwork_widget.dart';
 import '../../dialogs/playlist_dialogs.dart';
 
 class PlaylistsTab extends StatelessWidget {
-  final List<SongModel> cachedMostPlayed;
-  final List<SongModel> cachedRecentlyPlayed;
-  final List<SongModel> cachedRecentlyAdded;
-  final List<SongModel> songs;
-  final PlaybackController controller;
-  final List<UserPlaylist> userPlaylists;
-  final Map<String, int> cachedUserPlaylistTrackCounts;
-  
-  final Function(Widget) onShowInlineDetail;
-  final Function(SongModel) onOpenNowPlaying;
-  final int selectedTabIndex;
-  final Function(int) onNavigateTab;
-  final VoidCallback onCloseInlineDetail;
-  final bool isSelectionMode;
-  final VoidCallback onExitSelectionMode;
-  final bool nowPlayingRouteActive;
-  final Function(String) onPlaylistCreated;
-  final Function(UserPlaylist) onOpenUserPlaylistPage;
-  final VoidCallback onImportPlaylist;
-  final Function(int, int) onReorderUserPlaylists;
-
-  const PlaylistsTab({
-    super.key,
-    required this.cachedMostPlayed,
-    required this.cachedRecentlyPlayed,
-    required this.cachedRecentlyAdded,
-    required this.songs,
-    required this.controller,
-    required this.userPlaylists,
-    required this.cachedUserPlaylistTrackCounts,
-    required this.onShowInlineDetail,
-    required this.onOpenNowPlaying,
-    required this.selectedTabIndex,
-    required this.onNavigateTab,
-    required this.onCloseInlineDetail,
-    required this.isSelectionMode,
-    required this.onExitSelectionMode,
-    required this.nowPlayingRouteActive,
-    required this.onPlaylistCreated,
-    required this.onOpenUserPlaylistPage,
-    required this.onImportPlaylist,
-    required this.onReorderUserPlaylists,
-  });
+  const PlaylistsTab({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final appState = AppStateController.instance;
+    final controller = playbackController;
+    final cachedMostPlayed = appState.cachedMostPlayed;
+    final cachedRecentlyPlayed = appState.cachedRecentlyPlayed;
+    final cachedRecentlyAdded = appState.cachedRecentlyAdded;
+    final songs = appState.songs;
+    final userPlaylists = appState.userPlaylists;
+    final cachedUserPlaylistTrackCounts = appState.cachedUserPlaylistTrackCounts;
+    final selectedTabIndex = appState.selectedTabIndex;
+    final isSelectionMode = appState.isSelectionMode;
+    final nowPlayingRouteActive = appState.nowPlayingRouteActive;
+
   
     final cs = Theme.of(context).colorScheme;
 
@@ -81,7 +56,7 @@ class PlaylistsTab extends StatelessWidget {
         ),
       };
 
-      onShowInlineDetail(
+      appState.showInlineDetail(
         SmartPlaylistPage(
           player: controller.player,
           title: title,
@@ -93,18 +68,18 @@ class PlaylistsTab extends StatelessWidget {
           onQueueChanged: (_) {},
           selectedTabIndex: selectedTabIndex,
           onNavigateTab: (index) {
-            if (!mounted) return;
-            if (isSelectionMode) onExitSelectionMode();
-            setState(() => selectedTabIndex = index);
+            if (appState.isSelectionMode) appState.exitSelectionMode();
+          appState.selectedTabIndex = index;
+          appState.notifyListeners();
           },
           embeddedInHome: true,
-          onClose: onCloseInlineDetail,
+          onClose: appState.closeInlineDetail,
           onOpenNowPlaying: (s) {
             if (nowPlayingRouteActive) {
               Navigator.of(context).pop();
               return;
             }
-            onOpenNowPlaying(s);
+            appState.openNowPlaying(s);
           },
           onPlayAll: list.isEmpty
               ? null
@@ -300,11 +275,11 @@ class PlaylistsTab extends StatelessWidget {
                         onNewPlaylist: () async {
                           final pl = await promptCreatePlaylist(
                             context,
-                            onPlaylistCreated: onPlaylistCreated,
+                            onPlaylistCreated: appState.createNewPlaylist,
                           );
-                          if (pl != null) onOpenUserPlaylistPage(pl);
+                          if (pl != null) appState.openUserPlaylistPage(pl);
                         },
-                        onImportPlaylist: onImportPlaylist,
+                        onImportPlaylist: appState.importM3uPlaylistFlow,
                       );
                     },
                     icon: const Icon(Icons.add_rounded),
@@ -379,7 +354,7 @@ class PlaylistsTab extends StatelessWidget {
                         child: child,
                       );
                     },
-                onReorder: onReorderUserPlaylists,
+                onReorder: appState.reorderUserPlaylists,
                 children: [
                   for (var i = 0; i < userPlaylists.length; i++)
                     KeyedSubtree(
@@ -398,13 +373,13 @@ class PlaylistsTab extends StatelessWidget {
                               context,
                               userPlaylists[i],
                               onPlaylistRenamed: (name) =>
-                                  _renamePlaylist(userPlaylists[i], name),
+                                  appState.renamePlaylist(userPlaylists[i], name),
                             ),
                             onDeleteClicked: () => confirmAndDeletePlaylist(
                               context,
                               userPlaylists[i],
                               onPlaylistDeleted: () =>
-                                  _deletePlaylist(userPlaylists[i]),
+                                  appState.deletePlaylist(userPlaylists[i]),
                             ),
                           );
                         },
@@ -433,366 +408,15 @@ class PlaylistsTab extends StatelessWidget {
                         ),
                         onTap: () {
                           HapticFeedback.selectionClick();
-                          _openUserPlaylistPage(userPlaylists[i]);
+                          appState.openUserPlaylistPage(userPlaylists[i]);
                         },
                       ),
                     ),
                 ],
               ),
             ),
-          buildBottomBarsGutter(context),
+          const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],
       );
-  }
-
-  Future<void> onOpenNowPlaying(SongModel song) async {
-    if (!mounted) return;
-    if (nowPlayingRouteActive) return;
-    final lastClosed = _lastNowPlayingClosedAt;
-    if (lastClosed != null &&
-        DateTime.now().difference(lastClosed) <
-            const Duration(milliseconds: 500)) {
-      return;
-    }
-
-    nowPlayingRouteActive = true;
-    try {
-      await Navigator.of(context).push(
-        PageRouteBuilder(
-          opaque: false,
-          barrierDismissible: false,
-          barrierColor: Colors.transparent,
-          barrierLabel: 'Now Playing',
-          transitionDuration: const Duration(milliseconds: 400),
-          reverseTransitionDuration: const Duration(milliseconds: 350),
-          pageBuilder: (_, __, ___) => NowPlayingPage(
-            player: controller.player,
-            song: song,
-            songs: songs,
-            playlist: controller.currentPlaylist,
-            onQueueChanged: (_) {},
-            onOpenAlbum: _openAlbumPageFromSong,
-            onOpenArtist: _openArtistPageFromSong,
-            onSongUpdated: _updateSongMetadataInPlace,
-          ),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            final curve = CurveTween(curve: Curves.easeOutCubic);
-            final fade = Tween<double>(begin: 0.0, end: 1.0).chain(curve);
-            final scale = Tween<double>(begin: 0.95, end: 1.0).chain(curve);
-            return FadeTransition(
-              opacity: animation.drive(fade),
-              child: ScaleTransition(
-                scale: animation.drive(scale),
-                child: child,
-              ),
-            );
-          },
-        ),
-      );
-    } finally {
-      nowPlayingRouteActive = false;
-      _lastNowPlayingClosedAt = DateTime.now();
-    }
-  }
-
-  void _openAlbumPageFromSong(SongModel song) {
-    final albumId = song.albumId;
-    if (albumId == null || albumId <= 0) return;
-
-    final albumTitle = (song.album ?? '').trim().isEmpty
-        ? 'Unknown Album'
-        : song.album!.trim();
-    final albumArtist =
-        (song.getMap["album_artist"]?.toString().trim().isNotEmpty ?? false)
-        ? song.getMap["album_artist"].toString().trim()
-        : ((song.artist ?? '').trim().isEmpty
-              ? 'Unknown Artist'
-              : song.artist!.trim());
-
-    // Use album identity key to group tracks with the same album artist + album
-    // name, even if MediaStore assigned different album IDs (e.g. guest features).
-    final targetKey = albumIdentityKey(song);
-    final albumSongs = songs
-        .where((s) => albumIdentityKey(s) == targetKey)
-        .toList();
-    albumSongs.sort(compareDiscAndTrack);
-
-    onShowInlineDetail(
-      AlbumPage(
-        player: controller.player,
-        albumId: albumId,
-        albumTitle: albumTitle,
-        albumArtist: albumArtist,
-        songs: albumSongs,
-        librarySongs: songs,
-        playlist: controller.currentPlaylist,
-        onQueueChanged: (_) {},
-        selectedTabIndex: selectedTabIndex,
-        onNavigateTab: (index) {
-          if (!mounted) return;
-          if (isSelectionMode) onExitSelectionMode();
-          setState(() => selectedTabIndex = index);
-        },
-        embeddedInHome: true,
-        onClose: onCloseInlineDetail,
-        onOpenNowPlaying: (s) {
-          if (nowPlayingRouteActive) {
-            Navigator.of(context).pop();
-            return;
-          }
-          onOpenNowPlaying(s);
-        },
-        onPlaySong: (s) async {
-          final albumIndex = albumSongs.indexWhere((x) => x.id == s.id);
-          if (albumIndex == -1) return;
-          await controller.playFromQueue(albumSongs, initialIndex: albumIndex);
-        },
-        onShuffle: () async {
-          if (albumSongs.isEmpty) return;
-          final shuffled = List<SongModel>.from(albumSongs)..shuffle();
-          await controller.playFromQueue(shuffled, initialIndex: 0);
-        },
-      ),
-    );
-  }
-
-  void _openArtistPageFromSong(SongModel song) {
-    final name = (song.artist ?? '').trim().isEmpty
-        ? 'Unknown Artist'
-        : song.artist!.trim();
-    _openArtistPageByName(name);
-  }
-
-  void _openArtistPageByName(String artistName) {
-    final normalizedArtist = artistName.trim();
-    if (normalizedArtist.isEmpty) return;
-
-    String norm(String? v) => (v ?? '').trim().toLowerCase();
-    final target = norm(normalizedArtist);
-
-    final artistSongs = songs
-        .where((s) {
-          final a = norm(s.artist);
-          final aa = norm(albumArtistFor(s));
-          return a == target || aa == target;
-        })
-        .toList(growable: false);
-
-    if (artistSongs.isEmpty) return;
-
-    // Group into albums by identity key (albumArtist + albumName) instead of
-    // raw MediaStore albumId to prevent fragmentation from guest features.
-    final Map<String, List<SongModel>> songsByAlbumKey = {};
-    for (final s in artistSongs) {
-      final key = albumIdentityKey(s);
-      (songsByAlbumKey[key] ??= <SongModel>[]).add(s);
-    }
-
-    final albums = <ArtistAlbum>[];
-    for (final entry in songsByAlbumKey.entries) {
-      final songs = entry.value;
-      songs.sort(compareDiscAndTrack);
-
-      final title = (songs.first.album ?? '').trim().isEmpty
-          ? 'Unknown Album'
-          : songs.first.album!.trim();
-      int year = 0;
-      for (final s in songs) {
-        final y = yearFromSong(s);
-        if (y > 0 && (year == 0 || y < year)) year = y;
-      }
-
-      int totalMs = 0;
-      for (final s in songs) {
-        totalMs += (s.duration ?? 0);
-      }
-
-      // Use the first song's albumId as the representative for artwork lookups.
-      final repAlbumId = songs.first.albumId ?? 0;
-
-      albums.add(
-        ArtistAlbum(
-          albumId: repAlbumId,
-          title: title,
-          year: year,
-          trackCount: songs.length,
-          totalDurationMs: totalMs,
-          representativeSong: songs.first,
-        ),
-      );
-    }
-
-    // Sort artist's albums chronologically by release year.
-    albums.sort((a, b) {
-      final ay = a.year == 0 ? 9999 : a.year;
-      final by = b.year == 0 ? 9999 : b.year;
-      final yc = ay.compareTo(by);
-      if (yc != 0) return yc;
-      final tc = a.title.toLowerCase().compareTo(b.title.toLowerCase());
-      if (tc != 0) return tc;
-      return a.albumId.compareTo(b.albumId);
-    });
-
-    // Build album songs lookup by identity key for Play All.
-    final albumKeyForAlbum = <int, String>{};
-    for (final entry in songsByAlbumKey.entries) {
-      final repId = entry.value.first.albumId ?? 0;
-      albumKeyForAlbum[repId] = entry.key;
-    }
-
-    onShowInlineDetail(
-      ArtistPage(
-        player: controller.player,
-        artistName: normalizedArtist,
-        albums: albums,
-        librarySongs: songs,
-        playlist: controller.currentPlaylist,
-        onQueueChanged: (_) {},
-        selectedTabIndex: selectedTabIndex,
-        onNavigateTab: (index) {
-          if (!mounted) return;
-          if (isSelectionMode) onExitSelectionMode();
-          setState(() => selectedTabIndex = index);
-        },
-        embeddedInHome: true,
-        onClose: onCloseInlineDetail,
-        onOpenNowPlaying: (s) {
-          if (nowPlayingRouteActive) {
-            Navigator.of(context).pop();
-            return;
-          }
-          onOpenNowPlaying(s);
-        },
-        onOpenAlbum: (s) => _openAlbumPageFromSong(s),
-        onPlayAll: albums.isEmpty
-            ? null
-            : () async {
-                final queue = <SongModel>[];
-                for (final a in albums) {
-                  final key = albumKeyForAlbum[a.albumId] ?? '';
-                  final list = songsByAlbumKey[key] ?? const <SongModel>[];
-                  final sorted = List<SongModel>.from(list);
-                  sorted.sort(compareDiscAndTrack);
-                  queue.addAll(sorted);
-                }
-                if (queue.isEmpty) return;
-                await controller.playFromQueue(queue, initialIndex: 0);
-              },
-      ),
-    );
-  }
-}
-
-class _LibraryPermissionGate extends StatelessWidget {
-  final _LibraryPermissionState state;
-  final VoidCallback onGrant;
-  final VoidCallback onOpenSettings;
-
-  const _LibraryPermissionGate({
-    required this.state,
-    required this.onGrant,
-    required this.onOpenSettings,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final title = switch (state) {
-      _LibraryPermissionState.permanentlyDenied => 'Music access blocked',
-      _LibraryPermissionState.denied => 'Allow access to your music',
-      _LibraryPermissionState.unknown => 'Preparing your library',
-      _LibraryPermissionState.granted => 'Ready',
-    };
-
-    final body = switch (state) {
-      _LibraryPermissionState.permanentlyDenied =>
-        'Permission was denied permanently. Open Settings and enable Music/Audio access to scan your library.',
-      _LibraryPermissionState.denied =>
-        'To show your on-device songs, the app needs permission to read your audio library. Nothing is uploaded.',
-      _LibraryPermissionState.unknown =>
-        'We’ll ask for access only when you’re ready.',
-      _LibraryPermissionState.granted => '',
-    };
-
-    final primaryLabel = state == _LibraryPermissionState.permanentlyDenied
-        ? 'Open Settings'
-        : 'Grant access';
-    final primaryAction = state == _LibraryPermissionState.permanentlyDenied
-        ? onOpenSettings
-        : onGrant;
-
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: cs.secondaryContainer.withValues(
-                      alpha: Theme.of(context).brightness == Brightness.dark
-                          ? 0.25
-                          : 0.6,
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: cs.outlineVariant.withValues(alpha: 0.35),
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.library_music_rounded,
-                    size: 42,
-                    color: cs.onSecondaryContainer,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  body,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-                ),
-                const SizedBox(height: 18),
-                if (state == _LibraryPermissionState.unknown) ...[
-                  const CircularProgressIndicator(),
-                ] else ...[
-                  FilledButton.icon(
-                    onPressed: primaryAction,
-                    icon: Icon(
-                      state == _LibraryPermissionState.permanentlyDenied
-                          ? Icons.settings_rounded
-                          : Icons.lock_open_rounded,
-                    ),
-                    label: Text(primaryLabel),
-                  ),
-                  if (state != _LibraryPermissionState.permanentlyDenied) ...[
-                    const SizedBox(height: 10),
-                    TextButton(
-                      onPressed: onOpenSettings,
-                      child: const Text('Settings'),
-                    ),
-                  ],
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   }
 }

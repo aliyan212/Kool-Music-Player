@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../services/app_state_controller.dart';
+import '../../services/playback_controller.dart';
+import '../../main.dart';
 import '../../data/models/album_stat.dart';
 import '../../data/models/sort_mode.dart';
 import '../../utils/format_utils.dart';
@@ -6,21 +10,16 @@ import '../../ui/shared/fast_artwork_widget.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 class AlbumArtistsTab extends StatelessWidget {
-  final List<AlbumArtistStat> cachedAlbumArtists;
-  final AlbumArtistsSort albumArtistsSort;
-  final Function(AlbumArtistsSort) onSortChanged;
-  final Function(String) onOpenArtistPageByName;
-
-  const AlbumArtistsTab({
-    super.key,
-    required this.cachedAlbumArtists,
-    required this.albumArtistsSort,
-    required this.onSortChanged,
-    required this.onOpenArtistPageByName,
-  });
+  const AlbumArtistsTab({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final appState = AppStateController.instance;
+    final controller = playbackController;
+    final cachedAlbums = appState.cachedAlbums;
+    final cachedAlbumArtists = appState.cachedAlbumArtists;
+    final albumArtistsSort = appState.albumArtistsSort;
+
   
     final artists = cachedAlbumArtists;
 
@@ -65,10 +64,7 @@ class AlbumArtistsTab extends StatelessWidget {
                   initialValue: albumArtistsSort,
                   onSelected: (mode) {
                     HapticFeedback.selectionClick();
-                    setState(() {
-                      onSortChanged(mode);
-                      
-                    });
+                    appState.applyAlbumArtistsSort(mode);
                   },
                   itemBuilder: (context) => const [
                     PopupMenuItem(
@@ -143,7 +139,7 @@ class AlbumArtistsTab extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                           onTap: () {
                             HapticFeedback.selectionClick();
-                            onOpenArtistPageByName(stat.name);
+                            appState.openArtistPageByName(stat.name);
                           },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -212,7 +208,7 @@ class AlbumArtistsTab extends StatelessWidget {
                   );
                 }, childCount: artists.length),
               ),
-            buildBottomBarsGutter(context),
+            const SliverToBoxAdapter(child: SizedBox(height: 80)),
           ],
         ),
       );

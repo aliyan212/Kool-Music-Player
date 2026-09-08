@@ -1,63 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
+import '../../services/app_state_controller.dart';
+import '../../data/models/sort_mode.dart';
+import '../../main.dart';
 import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import '../../services/playback_controller.dart';
 import '../../ui/shared/fast_artwork_widget.dart';
 import '../../utils/format_utils.dart';
 
+enum AppMenuAction { refresh, manageFolders, toggleTheme, about, quit }
+
 class LibraryTab extends StatelessWidget {
-  final bool isVisible;
   final ScrollController scrollController;
-  final bool isSelectionMode;
-  final Set<int> selectedSongIds;
   final SearchController searchController;
   final ValueNotifier<bool> showSearchInAppBar;
-  final List<SongModel> songs;
-  final bool isLoading;
-  final dynamic permissionState;
-  final List<SongModel> cachedMostPlayed;
-  final List<SongModel> cachedRecentlyPlayed;
-  final List<SongModel> cachedRecentlyAdded;
-  final PlaybackController controller;
-  
-  final VoidCallback onExitSelectionMode;
-  final Future<bool> Function(List<int>) onAddSongsToPlaylist;
-  final Function(int) onToggleSelectedSongId;
-  final VoidCallback onEnterSelectionMode;
-  final Function(SongModel) onOpenAlbumPageFromSong;
-  final Function(SongModel) onOpenArtistPage;
-  final Function(SongModel) onShowSongOptions;
-  final Function(Widget) onShowInlineDetail;
-  final VoidCallback onRefreshLibrary;
 
   const LibraryTab({
     super.key,
-    required this.isVisible,
     required this.scrollController,
-    required this.isSelectionMode,
-    required this.selectedSongIds,
     required this.searchController,
     required this.showSearchInAppBar,
-    required this.songs,
-    required this.isLoading,
-    required this.permissionState,
-    required this.cachedMostPlayed,
-    required this.cachedRecentlyPlayed,
-    required this.cachedRecentlyAdded,
-    required this.controller,
-    required this.onExitSelectionMode,
-    required this.onAddSongsToPlaylist,
-    required this.onToggleSelectedSongId,
-    required this.onEnterSelectionMode,
-    required this.onOpenAlbumPageFromSong,
-    required this.onOpenArtistPage,
-    required this.onShowSongOptions,
-    required this.onShowInlineDetail,
-    required this.onRefreshLibrary,
   });
 
   @override
   Widget build(BuildContext context) {
+    final appState = AppStateController.instance;
+    final controller = playbackController;
+    final isVisible = appState.inlineDetailContent == null;
+    final isSelectionMode = appState.isSelectionMode;
+    final selectedSongIds = appState.selectedSongIds;
+    final songs = appState.songs;
+
   
     final cs = Theme.of(context).colorScheme;
 
@@ -101,7 +75,7 @@ class LibraryTab extends StatelessWidget {
                     tooltip: 'Cancel',
                     onPressed: () {
                       HapticFeedback.selectionClick();
-                      onExitSelectionMode();
+                      appState.exitSelectionMode();
                     },
                     icon: const Icon(Icons.close_rounded),
                   ),
@@ -114,8 +88,8 @@ class LibraryTab extends StatelessWidget {
                             final ids = selectedSongIds.toList(
                               growable: false,
                             );
-                            final didAdd = await onAddSongsToPlaylist(ids);
-                            if (didAdd) onExitSelectionMode();
+                            final didAdd = await appState.addSongsToPlaylistFlow(ids);
+                            if (didAdd) appState.exitSelectionMode();
                           },
                     icon: const Icon(Icons.playlist_add_rounded),
                   ),
@@ -416,14 +390,14 @@ class LibraryTab extends StatelessWidget {
                                   HapticFeedback.selectionClick();
                                   controller.closeView(song.title);
                                   FocusManager.instance.primaryFocus?.unfocus();
-                                  if (idx != -1) controller.playSong(idx);
+                                  if (idx != -1) playbackController.playFromQueue(songs, initialIndex: idx);
                                 },
                               ),
                               onTap: () {
                                 HapticFeedback.selectionClick();
                                 controller.closeView(song.title);
                                 FocusManager.instance.primaryFocus?.unfocus();
-                                if (idx != -1) controller.playSong(idx);
+                                if (idx != -1) playbackController.playFromQueue(songs, initialIndex: idx);
                               },
                             ),
                           );
@@ -474,7 +448,7 @@ class LibraryTab extends StatelessWidget {
                                 HapticFeedback.selectionClick();
                                 controller.closeView(albumTitle);
                                 FocusManager.instance.primaryFocus?.unfocus();
-                                onOpenAlbumPageFromSong(song);
+                                appState.openAlbumPageFromSong(song);
                               },
                             ),
                           );
@@ -517,7 +491,7 @@ class LibraryTab extends StatelessWidget {
                                 HapticFeedback.selectionClick();
                                 controller.closeView(name);
                                 FocusManager.instance.primaryFocus?.unfocus();
-                                _openArtistPageByName(name);
+                                appState.openArtistPageByName(name);
                               },
                             ),
                           );
@@ -578,7 +552,7 @@ class LibraryTab extends StatelessWidget {
                     tooltip: 'Sort library',
                     onSelected: (mode) {
                       HapticFeedback.selectionClick();
-                      _applySort(mode);
+                      appState.applySort(mode);
                     },
                     itemBuilder: (context) => [
                       PopupMenuItem(
@@ -608,45 +582,45 @@ class LibraryTab extends StatelessWidget {
                       ),
                     ],
                   ),
-                  PopupMenuButton<_AppMenuAction>(
+                  PopupMenuButton<AppMenuAction>(
                     icon: const Icon(Icons.more_vert),
                     onSelected: (action) {
                       HapticFeedback.selectionClick();
                       switch (action) {
-                        case _AppMenuAction.refresh:
-                          loadMusic();
+                        case AppMenuAction.refresh:
+                          appState.ensureLibraryPermissionAndLoad();
                           break;
-                        case _AppMenuAction.manageFolders:
-                          _showManageFoldersDialog();
+                        case AppMenuAction.manageFolders:
+                          appState.openManageFoldersDialog();
                           break;
-                        case _AppMenuAction.toggleTheme:
+                        case AppMenuAction.toggleTheme:
                           themeNotifier.toggle();
                           break;
-                        case _AppMenuAction.about:
-                          _openAboutPage();
+                        case AppMenuAction.about:
+                          appState.openAboutPage();
                           break;
-                        case _AppMenuAction.quit:
-                          _confirmQuit();
+                        case AppMenuAction.quit:
+                          appState.confirmQuit();
                           break;
                       }
                     },
                     itemBuilder: (context) => [
                       PopupMenuItem(
-                        value: _AppMenuAction.refresh,
+                        value: AppMenuAction.refresh,
                         child: menuLabel(
                           Icons.refresh_rounded,
                           'Scan/Refresh Library',
                         ),
                       ),
                       PopupMenuItem(
-                        value: _AppMenuAction.manageFolders,
+                        value: AppMenuAction.manageFolders,
                         child: menuLabel(
                           Icons.folder_copy_rounded,
                           'Manage Folders',
                         ),
                       ),
                       PopupMenuItem(
-                        value: _AppMenuAction.toggleTheme,
+                        value: AppMenuAction.toggleTheme,
                         child: menuLabel(
                           Icons.palette_rounded,
                           themeNotifier.themeMenuLabel,
@@ -654,11 +628,11 @@ class LibraryTab extends StatelessWidget {
                       ),
                       const PopupMenuDivider(),
                       PopupMenuItem(
-                        value: _AppMenuAction.about,
+                        value: AppMenuAction.about,
                         child: menuLabel(Icons.info_outline_rounded, 'About'),
                       ),
                       PopupMenuItem(
-                        value: _AppMenuAction.quit,
+                        value: AppMenuAction.quit,
                         child: Row(
                           children: [
                             Icon(
@@ -690,7 +664,7 @@ class LibraryTab extends StatelessWidget {
                           tooltip: 'Clear',
                           icon: const Icon(Icons.close_rounded),
                           onPressed: () =>
-                              setState(() => searchController.clear()),
+                              searchController.clear(),
                         ),
                     ],
                     onTap: () {
@@ -718,7 +692,7 @@ class LibraryTab extends StatelessWidget {
                   builder: (context, currentSongId, _) {
                     return ValueListenableBuilder<int?>(
                       valueListenable: controller.currentPlayIndexNotifier,
-                      builder: (context, currentPlayIndex, __) {
+                      builder: (context, currentPlayIndex, _) {
                         final isCurrent = currentSongId != null
                             ? currentSongId == song.id
                             : currentPlayIndex == index;
@@ -860,7 +834,7 @@ class LibraryTab extends StatelessWidget {
                                       onTap: () {
                                         HapticFeedback.selectionClick();
                                         if (isSelectionMode) {
-                                          onToggleSelectedSongId(song.id);
+                                          appState.toggleSelectedSongId(song.id);
                                         } else {
                                           controller.playSong(index);
                                         }
@@ -868,29 +842,9 @@ class LibraryTab extends StatelessWidget {
                                       onLongPress: () {
                                         HapticFeedback.mediumImpact();
                                         if (isSelectionMode) {
-                                          onToggleSelectedSongId(song.id);
+                                          appState.toggleSelectedSongId(song.id);
                                         } else {
-                                          showSongOptionsSheet(
-                                            context: context,
-                                            song: song,
-                                            index: index,
-                                            onEnterSelectionMode: (songId) =>
-                                                onEnterSelectionMode(
-                                                  initialSongId: songId,
-                                                ),
-                                            onOpenNowPlaying: (s) =>
-                                                _openNowPlaying(s),
-                                            onOpenAlbum: (s) =>
-                                                _openAlbumPageFromSong(s),
-                                            onOpenArtist: (s) =>
-                                                _openArtistPageFromSong(s),
-                                            onSongUpdated:
-                                                _updateSongMetadataInPlace,
-                                            runWithPlaybackSuspended:
-                                                _runWithPlaybackSuspendedForTagWrite,
-                                            onPlaySong: () =>
-                                                controller.playSong(index),
-                                          );
+                                          appState.showSongOptions(song, index);
                                         }
                                       },
                                       child: Padding(
@@ -1126,7 +1080,7 @@ class LibraryTab extends StatelessWidget {
                                                         : 'Select',
                                                     onPressed: () {
                                                       HapticFeedback.selectionClick();
-                                                      onToggleSelectedSongId(
+                                                      appState.toggleSelectedSongId(
                                                         song.id,
                                                       );
                                                     },
@@ -1170,7 +1124,7 @@ class LibraryTab extends StatelessWidget {
                                                               .player
                                                               .pause();
                                                         } else {
-                                                          await _ensureNotificationPermissionIfNeeded();
+                                                          await appState.checkNotificationPermission();
                                                           await controller
                                                               .player
                                                               .play();
@@ -1198,7 +1152,7 @@ class LibraryTab extends StatelessWidget {
                 );
               }, childCount: songs.length),
             ),
-            buildBottomBarsGutter(context),
+            const SliverToBoxAdapter(child: SizedBox(height: 80)),
           ],
         ),
       );

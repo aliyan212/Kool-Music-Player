@@ -7,7 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import '../utils/palette_compute.dart';
 import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/format_utils.dart';
-import '../main.dart';
+import '../ui/shared/bottom_bars_gutter.dart';
 
 class AlbumPage extends StatefulWidget {
   final AudioPlayer player;

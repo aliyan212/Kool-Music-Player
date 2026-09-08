@@ -6,7 +6,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
 import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/format_utils.dart';
-import '../main.dart';
+import '../ui/shared/bottom_bars_gutter.dart';
 
 class ArtistPage extends StatefulWidget {
   final AudioPlayer player;

@@ -8,7 +8,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
-import 'package:music_player/main.dart' as app;
+import 'package:music_player/utils/song_repair_utils.dart';
 import 'package:music_player/utils/format_utils.dart';
 
 void main() {
@@ -23,7 +23,7 @@ void main() {
   });
 
   test('repairSongMetadataMap fills blank values from real tags and display names', () {
-    final repaired = app.repairSongMetadataMap(
+    final repaired = repairSongMetadataMap(
       <dynamic, dynamic>{
         'id': 42,
         'title': '',
@@ -51,7 +51,7 @@ void main() {
     expect(repaired['year'], 2024);
     expect(repaired['track'], 7);
 
-    final filenameFallback = app.repairSongMetadataMap(
+    final filenameFallback = repairSongMetadataMap(
       <dynamic, dynamic>{
         'title': '',
         'artist': 'unknown',
@@ -74,7 +74,7 @@ void main() {
       'track': 12,
     };
 
-    final repaired = app.repairSongMetadataMap(original, title: 'Replacement');
+    final repaired = repairSongMetadataMap(original, title: 'Replacement');
     expect(repaired['title'], 'Already Good');
     expect(repaired['artist'], 'Existing Artist');
     expect(repaired['year'], 1999);
@@ -96,7 +96,7 @@ void main() {
       }),
     ];
 
-    final repaired = await app.repairSongMetadataList(list, tagTitle: 'Example Song');
+    final repaired = await repairSongMetadataList(list, tagTitle: 'Example Song');
     expect(repaired.single.title, 'Example Song');
   });
 }
