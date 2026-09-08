@@ -201,7 +201,9 @@ class _NowPlayingPageState extends State<NowPlayingPage>
         if (_artworkPulseController.isAnimating) _artworkPulseController.stop();
         return;
       }
-      if (state.playing) {
+      final isPlaying =
+          state.playing && state.processingState != ProcessingState.completed;
+      if (isPlaying) {
         if (!_artworkPulseController.isAnimating) {
           _artworkPulseController.repeat(reverse: true);
         }
@@ -212,7 +214,10 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       }
     });
 
-    if (widget.player.playing && appIsForeground.value && !_disableMotion) {
+    if (widget.player.playing &&
+        widget.player.processingState != ProcessingState.completed &&
+        appIsForeground.value &&
+        !_disableMotion) {
       _artworkPulseController.repeat(reverse: true);
     }
 
@@ -1043,18 +1048,19 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                                           .playerStateStream,
                                                       builder: (context, snap) {
                                                         final playing =
-                                                            snap
-                                                                .data
-                                                                ?.playing ??
-                                                            false;
+                                                            (snap.data?.playing ?? false) &&
+                                                                snap.data?.processingState !=
+                                                                    ProcessingState.completed;
                                                         return IconButton.filledTonal(
                                                           onPressed: playing
-                                                              ? widget
-                                                                    .player
-                                                                    .pause
-                                                              : widget
-                                                                    .player
-                                                                    .play,
+                                                              ? widget.player.pause
+                                                              : () async {
+                                                                  if (widget.player.processingState ==
+                                                                      ProcessingState.completed) {
+                                                                    await widget.player.seek(Duration.zero);
+                                                                  }
+                                                                  widget.player.play();
+                                                                },
                                                           icon: Icon(
                                                             playing
                                                                 ? Icons
@@ -1753,7 +1759,9 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                     final position = widget.player.position;
                                     final total =
                                         widget.player.duration ?? Duration.zero;
-                                    final isPlaying = widget.player.playing;
+                                    final isPlaying = widget.player.playing &&
+                                        widget.player.processingState !=
+                                            ProcessingState.completed;
                                     return Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -1800,7 +1808,11 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                     stream: widget.player.playerStateStream,
                                     builder: (context, playerSnapshot) {
                                       final isPlaying =
-                                          playerSnapshot.data?.playing ?? false;
+                                          (playerSnapshot.data?.playing ??
+                                                  false) &&
+                                              playerSnapshot
+                                                      .data?.processingState !=
+                                                  ProcessingState.completed;
                                       return StreamBuilder<Duration>(
                                         stream: widget.player.positionStream,
                                         builder: (context, snapshot) {

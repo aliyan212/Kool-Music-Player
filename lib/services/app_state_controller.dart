@@ -78,6 +78,9 @@ class AppStateController extends ChangeNotifier {
 
   void selectTab(int index) {
     if (isSelectionMode) exitSelectionMode();
+    if (inlineDetailContent != null) {
+      inlineDetailContent = null;
+    }
     selectedTabIndex = index;
     notifyListeners();
   }
@@ -706,12 +709,7 @@ class AppStateController extends ChangeNotifier {
         playlist: _controller.currentPlaylist,
         onQueueChanged: (_) {},
         selectedTabIndex: selectedTabIndex,
-        onNavigateTab: (index) {
-          
-          if (isSelectionMode) exitSelectionMode();
-          selectedTabIndex = index;
-    notifyListeners();
-        },
+        onNavigateTab: selectTab,
         embeddedInHome: true,
         onClose: closeInlineDetail,
         onOpenNowPlaying: (s) {
@@ -1678,12 +1676,7 @@ class AppStateController extends ChangeNotifier {
         playlist: _controller.currentPlaylist,
         onQueueChanged: (_) {},
         selectedTabIndex: selectedTabIndex,
-        onNavigateTab: (index) {
-          
-          if (isSelectionMode) exitSelectionMode();
-          selectedTabIndex = index;
-    notifyListeners();
-        },
+        onNavigateTab: selectTab,
         embeddedInHome: true,
         onClose: closeInlineDetail,
         onOpenNowPlaying: (s) {
@@ -1800,12 +1793,7 @@ class AppStateController extends ChangeNotifier {
         playlist: _controller.currentPlaylist,
         onQueueChanged: (_) {},
         selectedTabIndex: selectedTabIndex,
-        onNavigateTab: (index) {
-          
-          if (isSelectionMode) exitSelectionMode();
-          selectedTabIndex = index;
-    notifyListeners();
-        },
+        onNavigateTab: selectTab,
         embeddedInHome: true,
         onClose: closeInlineDetail,
         onOpenNowPlaying: (s) {

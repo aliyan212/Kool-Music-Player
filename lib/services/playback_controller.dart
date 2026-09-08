@@ -117,6 +117,10 @@ class PlaybackController {
       _syncLibraryCurrentIndexFromSequenceState(state);
     });
     _playerStateSub = _player.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        unawaited(_handlePlaybackCompleted());
+        return;
+      }
       final nowPlaying = state.playing;
       if (!_wasPlaying && nowPlaying) {
         final id = currentSongId ?? _currentSongIdFromPlayer();
@@ -125,6 +129,21 @@ class PlaybackController {
       _wasPlaying = nowPlaying;
       _hasStartedPlayback = _hasStartedPlayback || state.playing;
     });
+  }
+
+  bool _isHandlingCompletion = false;
+
+  Future<void> _handlePlaybackCompleted() async {
+    if (_isHandlingCompletion) return;
+    _isHandlingCompletion = true;
+    _wasPlaying = false;
+    try {
+      await _player.pause();
+      await _player.seek(Duration.zero);
+    } catch (_) {
+    } finally {
+      _isHandlingCompletion = false;
+    }
   }
 
   void detachStreamListeners() {
@@ -138,15 +157,23 @@ class PlaybackController {
 
   // ── Play / pause / seek ────────────────────────────────────────────
 
-  Future<void> play() => _player.play();
+  bool get isActuallyPlaying =>
+      _player.playing && _player.processingState != ProcessingState.completed;
+
+  Future<void> play() async {
+    if (_player.processingState == ProcessingState.completed) {
+      await _player.seek(Duration.zero);
+    }
+    return _player.play();
+  }
   Future<void> pause() => _player.pause();
   Future<void> stop() => _player.stop();
 
   Future<void> togglePlayPause() async {
-    if (_player.playing) {
+    if (isActuallyPlaying) {
       await _player.pause();
     } else {
-      await _player.play();
+      await play();
     }
   }
 

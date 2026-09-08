@@ -5,12 +5,14 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 import 'package:music_player/utils/song_repair_utils.dart';
 import 'package:music_player/utils/format_utils.dart';
 import 'package:music_player/data/models/user_playlist.dart';
+import 'package:music_player/services/app_state_controller.dart';
 
 void main() {
   test('formatTime formats mm:ss', () {
@@ -117,5 +119,27 @@ void main() {
     expect(playlist.songIds, [64287, 64306, 64237]);
     expect(playlist.createdAtMs, 1725785000000);
     expect(playlist.updatedAtMs, 1725785000000);
+  });
+
+  test('AppStateController.selectTab clears inlineDetailContent when switching or reselecting tabs', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final appState = AppStateController.instance;
+
+    // Simulate opening an inline detail (e.g. album) on tab 1
+    appState.selectedTabIndex = 1;
+    appState.inlineDetailContent = const Text('Album Detail');
+    expect(appState.inlineDetailContent, isNotNull);
+
+    // Clicking a different tab should clear inline detail and switch tab
+    appState.selectTab(3);
+    expect(appState.inlineDetailContent, isNull);
+    expect(appState.selectedTabIndex, 3);
+
+    // Simulate opening an inline detail on tab 3, then tapping tab 3 again
+    appState.inlineDetailContent = const Text('Playlist Detail');
+    expect(appState.inlineDetailContent, isNotNull);
+    appState.selectTab(3);
+    expect(appState.inlineDetailContent, isNull);
+    expect(appState.selectedTabIndex, 3);
   });
 }

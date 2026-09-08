@@ -126,7 +126,8 @@ class NowPlayingTransport extends StatelessWidget {
           StreamBuilder<PlayerState>(
             stream: player.playerStateStream,
             builder: (context, snapshot) {
-              final playing = snapshot.data?.playing ?? false;
+              final playing = (snapshot.data?.playing ?? false) &&
+                  snapshot.data?.processingState != ProcessingState.completed;
               return Tooltip(
                 message: playing ? 'Pause' : 'Play',
                 child: Material(
@@ -140,6 +141,10 @@ class NowPlayingTransport extends StatelessWidget {
                       if (playing) {
                         await player.pause();
                       } else {
+                        if (player.processingState ==
+                            ProcessingState.completed) {
+                          await player.seek(Duration.zero);
+                        }
                         await onPlayPressed();
                       }
                     },

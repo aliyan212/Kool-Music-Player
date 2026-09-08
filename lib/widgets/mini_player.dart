@@ -633,7 +633,9 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
                       StreamBuilder<PlayerState>(
                         stream: widget.controller.playerStateStream,
                         builder: (context, snap) {
-                          final playing = snap.data?.playing ?? false;
+                          final playing = (snap.data?.playing ?? false) &&
+                              snap.data?.processingState !=
+                                  ProcessingState.completed;
                           return _buildControlButton(
                             playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                             textColor,

@@ -81,7 +81,6 @@ Widget buildDetailBottomBars({
               child: NavigationBar(
                 selectedIndex: selectedTabIndex,
                 onDestinationSelected: (index) {
-                  if (index == selectedTabIndex) return;
                   HapticFeedback.selectionClick();
                   onNavigateTab(index);
                   Navigator.of(context).popUntil((route) => route.isFirst);

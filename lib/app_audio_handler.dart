@@ -29,7 +29,10 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   AppAudioHandler(this.player) {
     unawaited(_initAudioSession());
 
-    _playerStateSub = player.playerStateStream.listen((_) {
+    _playerStateSub = player.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        unawaited(_handlePlaybackCompleted());
+      }
       _syncPositionTimer();
       _broadcastState();
 
@@ -137,7 +140,10 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   void _recordPlaybackProgress() {
-    if (!player.playing) return;
+    if (!player.playing ||
+        player.processingState == ProcessingState.completed) {
+      return;
+    }
     final currentPosition = player.position;
     if (_lastPlaybackPosition != currentPosition) {
       _lastPlaybackPosition = currentPosition;
@@ -322,8 +328,17 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await player.dispose();
   }
 
+  Future<void> _handlePlaybackCompleted() async {
+    try {
+      await player.pause();
+      await player.seek(Duration.zero);
+    } catch (_) {}
+  }
+
   void _syncPositionTimer() {
-    if (player.playing) {
+    final isActuallyPlaying = player.playing &&
+        player.processingState != ProcessingState.completed;
+    if (isActuallyPlaying) {
       _positionUpdateTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
         _recordPlaybackProgress();
         unawaited(_recoverFromStuckPlaybackIfNeeded());
@@ -388,8 +403,10 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   List<MediaControl> _notificationControls() {
     final shuffleEnabled = player.shuffleModeEnabled;
     final loopMode = player.loopMode;
+    final isActuallyPlaying = player.playing &&
+        player.processingState != ProcessingState.completed;
 
-    final rightButton = !player.playing
+    final rightButton = !isActuallyPlaying
         ? MediaControl.custom(
             androidIcon: 'drawable/ic_close',
             label: 'Close',
@@ -418,7 +435,7 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         name: _actionToggleShuffle,
       ),
       MediaControl.skipToPrevious,
-      player.playing ? MediaControl.pause : MediaControl.play,
+      isActuallyPlaying ? MediaControl.pause : MediaControl.play,
       MediaControl.skipToNext,
       rightButton,
     ];
@@ -426,6 +443,8 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   void _broadcastState() {
     if (_suspendStateUpdates) return;
+    final isActuallyPlaying = player.playing &&
+        player.processingState != ProcessingState.completed;
 
     playbackState.add(
       playbackState.value.copyWith(
@@ -433,7 +452,7 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         androidCompactActionIndices: const [0, 2, 4],
         systemActions: const {MediaAction.seek},
         processingState: _mapProcessingState(player.processingState),
-        playing: player.playing,
+        playing: isActuallyPlaying,
         updatePosition: player.position,
         bufferedPosition: player.bufferedPosition,
         speed: player.speed,
@@ -459,6 +478,9 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> play() async {
+    if (player.processingState == ProcessingState.completed) {
+      await player.seek(Duration.zero);
+    }
     // If we lost focus permanently, re-acquire it before playing.
     if (_focusState == AudioFocusState.permanentLoss) {
       try {
