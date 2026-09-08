@@ -60,6 +60,7 @@ class AppStateController extends ChangeNotifier {
   final SearchController searchController = SearchController();
   static final AppStateController instance = AppStateController._();
   AppStateController._() {
+    _controller.attachStreamListeners();
     _controller.onPlayHistoryUpdated = () {
       recomputePlayHistoryStats();
       notifyListeners();

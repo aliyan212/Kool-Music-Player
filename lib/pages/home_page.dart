@@ -26,6 +26,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    playbackController.attachStreamListeners();
     _appState.selectedTabIndex = widget.initialTabIndex;
     _appState.ensureLibraryPermissionAndLoad(fromUserAction: false);
     _appState.loadUserPlaylists();

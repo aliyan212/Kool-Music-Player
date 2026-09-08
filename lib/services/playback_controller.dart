@@ -18,7 +18,9 @@ import 'app_local_store.dart';
 /// operations that the UI needs.
 class PlaybackController {
   PlaybackController({AudioPlayer? player})
-    : _player = player ?? AudioPlayer();
+    : _player = player ?? AudioPlayer() {
+    attachStreamListeners();
+  }
 
   // ── Core player ────────────────────────────────────────────────────
   final AudioPlayer _player;
@@ -204,21 +206,31 @@ class PlaybackController {
 
     final songId = songIdFromTag(seq[playerIndex].tag);
     if (songId == null) return;
+    final idChanged = currentSongId != songId;
     currentSongId = songId;
 
     if (_suppressIndexUpdates) return;
     final libraryIndex = songs.indexWhere((s) => s.id == songId);
-    if (libraryIndex >= 0) currentPlayIndex = libraryIndex;
+    currentPlayIndex = libraryIndex >= 0 ? libraryIndex : null;
+
+    if (idChanged && _player.playing) {
+      recordPlayForSongId(songId);
+    }
   }
 
   void _syncLibraryCurrentIndexFromSequenceState(SequenceState? state) {
     final songId = songIdFromTag(state?.currentSource?.tag);
     if (songId == null) return;
+    final idChanged = currentSongId != songId;
     currentSongId = songId;
 
     if (_suppressIndexUpdates) return;
     final libraryIndex = songs.indexWhere((s) => s.id == songId);
-    if (libraryIndex >= 0) currentPlayIndex = libraryIndex;
+    currentPlayIndex = libraryIndex >= 0 ? libraryIndex : null;
+
+    if (idChanged && _player.playing) {
+      recordPlayForSongId(songId);
+    }
   }
 
   // ── URI / media-item helpers ───────────────────────────────────────
