@@ -59,7 +59,8 @@ class SmartPlaylistPage extends StatelessWidget {
     final subtitle = '${songs.length} tracks';
 
     final content = CustomScrollView(
-        slivers: [
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
           SliverAppBar.large(
             title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
             expandedHeight: 166,
@@ -301,16 +302,14 @@ class SmartPlaylistPage extends StatelessWidget {
                 );
               }, childCount: songs.length),
             ),
-          if (embeddedInHome)
-            buildBottomBarsGutter(context)
-          else
-            const SliverToBoxAdapter(child: SizedBox(height: 18)),
+          buildBottomBarsGutter(context),
         ],
       );
 
     if (embeddedInHome) return content;
 
     return Scaffold(
+      extendBody: true,
       bottomNavigationBar: StreamBuilder<int?>(
         stream: player.currentIndexStream,
         builder: (context, snapshot) {
@@ -1119,6 +1118,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
               ),
             ),
             CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverAppBar(
                   pinned: true,
@@ -1838,10 +1838,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                     itemCount: songs.length,
                     onReorder: canReorder ? _reorderVisible : (a, b) {},
                   ),
-                if (widget.embeddedInHome)
-                  buildBottomBarsGutter(context)
-                else
-                  const SliverToBoxAdapter(child: SizedBox(height: 18)),
+                buildBottomBarsGutter(context),
               ],
             ),
           ],
@@ -1852,6 +1849,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
     if (widget.embeddedInHome) return content;
 
     return Scaffold(
+      extendBody: true,
       bottomNavigationBar: StreamBuilder<int?>(
         stream: widget.player.currentIndexStream,
         builder: (context, snapshot) {

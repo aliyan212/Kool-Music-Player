@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../services/app_state_controller.dart';
 import '../../data/models/album_stat.dart';
 import '../../ui/shared/fast_artwork_widget.dart';
+import '../../ui/shared/bottom_bars_gutter.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 class AlbumsTab extends StatelessWidget {
@@ -44,6 +45,7 @@ class AlbumsTab extends StatelessWidget {
 
     return Scrollbar(
         child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar.large(
               title: const Text('Albums'),
@@ -126,9 +128,14 @@ class AlbumsTab extends StatelessWidget {
             if (albums.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(child: Text('No albums found')),
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 80),
+                    child: Text('No albums found'),
+                  ),
+                ),
               )
-            else
+            else ...[
               SliverList(
                 delegate: SliverChildBuilderDelegate((context, i) {
                   final album = albums[i];
@@ -239,7 +246,8 @@ class AlbumsTab extends StatelessWidget {
                   );
                 }, childCount: albums.length),
               ),
-            const SliverToBoxAdapter(child: SizedBox(height: 80)),
+              buildBottomBarsGutter(context),
+            ],
           ],
         ),
       );

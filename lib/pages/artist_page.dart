@@ -70,6 +70,7 @@ class ArtistPage extends StatefulWidget {
     final paletteAlbumId = albums.isNotEmpty ? albums.first.albumId : 0;
 
     final content = CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverAppBar(
             pinned: true,
@@ -240,16 +241,14 @@ class ArtistPage extends StatefulWidget {
               );
             },
           ),
-          if (embeddedInHome)
-            buildBottomBarsGutter(context)
-          else
-            const SliverToBoxAdapter(child: SizedBox(height: 18)),
+          buildBottomBarsGutter(context),
         ],
       );
 
     if (embeddedInHome) return content;
 
     return Scaffold(
+      extendBody: true,
       bottomNavigationBar: StreamBuilder<int?>(
         stream: player.currentIndexStream,
         builder: (context, snapshot) {

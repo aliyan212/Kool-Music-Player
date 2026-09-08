@@ -178,6 +178,7 @@ class AlbumPage extends StatefulWidget {
                 ),
               ),
               CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   SliverAppBar(
                     pinned: true,
@@ -395,10 +396,7 @@ class AlbumPage extends StatefulWidget {
                       );
                     },
                   ),
-                  if (embeddedInHome)
-                    buildBottomBarsGutter(context)
-                  else
-                    const SliverToBoxAdapter(child: SizedBox(height: 18)),
+                  buildBottomBarsGutter(context),
                 ],
               ),
             ],
@@ -409,6 +407,7 @@ class AlbumPage extends StatefulWidget {
     if (embeddedInHome) return content;
 
     return Scaffold(
+      extendBody: true,
       bottomNavigationBar: StreamBuilder<int?>(
         stream: player.currentIndexStream,
         builder: (context, snapshot) {

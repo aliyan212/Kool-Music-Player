@@ -8,6 +8,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import '../../services/playback_controller.dart';
 import '../../ui/shared/fast_artwork_widget.dart';
 import '../../utils/format_utils.dart';
+import '../../ui/shared/bottom_bars_gutter.dart';
 
 enum AppMenuAction { refresh, manageFolders, toggleTheme, about, quit }
 
@@ -49,6 +50,7 @@ class LibraryTab extends StatelessWidget {
         controller: scrollController,
         interactive: true,
         child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           // Helps avoid transient blanking while scrubbing the scrollbar quickly
           // by keeping more children alive and prefetched.
           cacheExtent: 1200,
@@ -1152,7 +1154,7 @@ class LibraryTab extends StatelessWidget {
                 );
               }, childCount: songs.length),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 80)),
+            buildBottomBarsGutter(context),
           ],
         ),
       );

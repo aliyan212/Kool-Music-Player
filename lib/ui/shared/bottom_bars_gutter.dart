@@ -16,11 +16,12 @@ import '../../widgets/mini_player.dart';
 Widget buildBottomBarsGutter(
   BuildContext context, {
   bool includeMiniPlayer = true,
+  double extraPadding = 0,
 }) {
-  // 72px themed NavigationBar + breathing room and bottom insets.
-  const double navBarReserve = 80;
-  // 80px mini-player + 6px bottom margin.
-  const double miniPlayerReserve = 86;
+  // NavigationBar reserve: 80px M3 NavigationBar + 16px bottom breathing clearance.
+  const double navBarReserve = 96;
+  // MiniPlayer reserve: 80px card + 6px bottom margin + 8px dynamic inset buffer + 16px clearance.
+  const double miniPlayerReserve = 110;
   final double bottomInset = MediaQuery.of(context).padding.bottom;
   return SliverToBoxAdapter(
     child: ValueListenableBuilder<int?>(
@@ -29,7 +30,8 @@ Widget buildBottomBarsGutter(
         final double gutter =
             bottomInset +
             navBarReserve +
-            (includeMiniPlayer && songId != null ? miniPlayerReserve : 0);
+            (includeMiniPlayer && songId != null ? miniPlayerReserve : 0) +
+            extraPadding;
         return SizedBox(height: gutter);
       },
     ),

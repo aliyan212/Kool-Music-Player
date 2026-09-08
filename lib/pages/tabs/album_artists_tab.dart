@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/app_state_controller.dart';
 import '../../data/models/album_stat.dart';
+import '../../ui/shared/bottom_bars_gutter.dart';
 
 class AlbumArtistsTab extends StatelessWidget {
   const AlbumArtistsTab({super.key});
@@ -39,6 +40,7 @@ class AlbumArtistsTab extends StatelessWidget {
 
     return Scrollbar(
         child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar.large(
               title: const Text('Album Artists'),
@@ -107,9 +109,14 @@ class AlbumArtistsTab extends StatelessWidget {
             if (artists.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(child: Text('No artists found')),
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 80),
+                    child: Text('No artists found'),
+                  ),
+                ),
               )
-            else
+            else ...[
               SliverList(
                 delegate: SliverChildBuilderDelegate((context, i) {
                   final stat = artists[i];
@@ -203,7 +210,8 @@ class AlbumArtistsTab extends StatelessWidget {
                   );
                 }, childCount: artists.length),
               ),
-            const SliverToBoxAdapter(child: SizedBox(height: 80)),
+              buildBottomBarsGutter(context),
+            ],
           ],
         ),
       );

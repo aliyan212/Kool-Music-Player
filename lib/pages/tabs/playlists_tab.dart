@@ -6,6 +6,7 @@ import '../../services/app_state_controller.dart';
 import '../../data/models/user_playlist.dart';
 import '../../services/playback_controller.dart';
 import '../../dialogs/playlist_dialogs.dart';
+import '../../ui/shared/bottom_bars_gutter.dart';
 
 class PlaylistsTab extends StatelessWidget {
   const PlaylistsTab({super.key});
@@ -181,7 +182,8 @@ class PlaylistsTab extends StatelessWidget {
     final recentlyAddedCount = recentlyAddedList.length;
 
     return CustomScrollView(
-        slivers: [
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
           SliverAppBar.large(
             title: const Text('Playlists'),
             expandedHeight: 166,
@@ -410,7 +412,7 @@ class PlaylistsTab extends StatelessWidget {
                 ],
               ),
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 80)),
+          buildBottomBarsGutter(context),
         ],
       );
       },
