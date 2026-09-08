@@ -40,14 +40,26 @@ class _QueuePageState extends State<QueuePage> {
   late int _currentIndex;
   late final Map<int, SongModel> _songById;
   StreamSubscription<SequenceState?>? _sequenceSub;
+  StreamSubscription<bool>? _shuffleSub;
   bool _isReordering = false;
   bool _ignoreSequenceUpdates = false;
+  bool _shuffleEnabled = false;
+  List<int> _shuffleIndices = [];
 
   bool _sameQueueById(List<SongModel> a, List<SongModel> b) {
     if (identical(a, b)) return true;
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i].id != b[i].id) return false;
+    }
+    return true;
+  }
+
+  bool _sameIntList(List<int> a, List<int> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
     }
     return true;
   }
@@ -71,10 +83,31 @@ class _QueuePageState extends State<QueuePage> {
     return out;
   }
 
+  /// Returns the queue indices for the "up next" songs in actual playback order.
+  /// When shuffle is enabled, uses [_shuffleIndices]; otherwise linear order.
+  List<int> _computeUpNext() {
+    if (_shuffleEnabled && _shuffleIndices.isNotEmpty) {
+      final posInShuffle = _shuffleIndices.indexOf(_currentIndex);
+      if (posInShuffle >= 0) {
+        return [
+          for (var i = posInShuffle + 1; i < _shuffleIndices.length; i++)
+            _shuffleIndices[i],
+        ];
+      }
+    }
+    // Fallback: linear order after _currentIndex
+    return [
+      for (var i = _currentIndex + 1; i < _queue.length; i++) i,
+    ];
+  }
+
   @override
   void initState() {
     super.initState();
     _songById = {for (final s in widget.songs) s.id: s};
+
+    _shuffleEnabled = widget.player.shuffleModeEnabled;
+    _shuffleIndices = widget.player.shuffleIndices ?? [];
 
     final initialSequence = widget.player.sequence;
     if (initialSequence.isNotEmpty) {
@@ -109,22 +142,34 @@ class _QueuePageState extends State<QueuePage> {
       final mappedQueue = _queueFromSequence(seq);
       final nextQueue = mappedQueue.isNotEmpty ? mappedQueue : _queue;
       final nextIndex = widget.player.currentIndex ?? _currentIndex;
+      final nextShuffleIndices = state.shuffleIndices ?? [];
 
       final orderChanged = !_sameQueueById(_queue, nextQueue);
       final indexChanged = nextIndex != _currentIndex;
-      if (!orderChanged && !indexChanged) return;
+      final shuffleChanged = !_sameIntList(_shuffleIndices, nextShuffleIndices);
+      if (!orderChanged && !indexChanged && !shuffleChanged) return;
 
       setState(() {
         if (orderChanged) _queue = nextQueue;
         _currentIndex = nextIndex.clamp(0, _queue.isEmpty ? 0 : _queue.length - 1);
+        if (shuffleChanged) _shuffleIndices = nextShuffleIndices;
       });
       if (orderChanged) widget.onQueueChanged(_queue);
+    });
+
+    _shuffleSub = widget.player.shuffleModeEnabledStream.listen((enabled) {
+      if (!mounted) return;
+      setState(() {
+        _shuffleEnabled = enabled;
+        _shuffleIndices = widget.player.shuffleIndices ?? [];
+      });
     });
   }
 
   @override
   void dispose() {
     _sequenceSub?.cancel();
+    _shuffleSub?.cancel();
     super.dispose();
   }
 
@@ -297,8 +342,8 @@ class _QueuePageState extends State<QueuePage> {
           Expanded(
             child: Builder(
               builder: (context) {
-                final upNextCount = (_queue.length - _currentIndex - 1).clamp(0, _queue.length);
-                if (upNextCount == 0) {
+                final upNextIndices = _computeUpNext();
+                if (upNextIndices.isEmpty) {
                   return Center(
                     child: Text(
                       'Nothing up next',
@@ -309,10 +354,10 @@ class _QueuePageState extends State<QueuePage> {
 
                 return ReorderableListView.builder(
                   padding: const EdgeInsets.only(bottom: 100),
-                  itemCount: upNextCount,
+                  itemCount: upNextIndices.length,
                   buildDefaultDragHandles: false,
-                  onReorderStart: (_) => setState(() => _isReordering = true),
-                  onReorderEnd: (_) => setState(() => _isReordering = false),
+                  onReorderStart: _shuffleEnabled ? null : (_) => setState(() => _isReordering = true),
+                  onReorderEnd: _shuffleEnabled ? null : (_) => setState(() => _isReordering = false),
                   proxyDecorator: (child, index, animation) {
                     return AnimatedBuilder(
                       animation: animation,
@@ -336,17 +381,18 @@ class _QueuePageState extends State<QueuePage> {
                     );
                   },
                   onReorder: (oldIndex, newIndex) {
+                    if (_shuffleEnabled) return; // reordering not supported in shuffle
                     if (oldIndex == newIndex) return;
-                    final actualOld = oldIndex + _currentIndex + 1;
-                    var actualNew = newIndex + _currentIndex + 1;
-                    if (newIndex > oldIndex) actualNew--;
-                    actualNew = actualNew.clamp(_currentIndex + 1, _queue.length - 1);
+                    final actualOld = upNextIndices[oldIndex];
+                    var adjustedNew = newIndex > oldIndex ? newIndex - 1 : newIndex;
+                    adjustedNew = adjustedNew.clamp(0, upNextIndices.length - 1);
+                    final actualNew = upNextIndices[adjustedNew];
                     _moveItem(actualOld, actualNew);
                   },
                   itemBuilder: (context, index) {
-                    final actualIndex = index + _currentIndex + 1;
-                    final song = _queue[actualIndex];
-                    return _buildQueueTile(song, actualIndex, index);
+                    final queueIndex = upNextIndices[index];
+                    final song = _queue[queueIndex];
+                    return _buildQueueTile(song, queueIndex, index);
                   },
                 );
               },
