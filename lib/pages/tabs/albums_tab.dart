@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/app_state_controller.dart';
-import '../../services/playback_controller.dart';
-import '../../main.dart';
 import '../../data/models/album_stat.dart';
-import '../../data/models/sort_mode.dart';
-import '../../utils/format_utils.dart';
 import '../../ui/shared/fast_artwork_widget.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
@@ -15,13 +11,11 @@ class AlbumsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = AppStateController.instance;
-    final controller = playbackController;
-    final cachedAlbums = appState.cachedAlbums;
-    final cachedAlbumArtists = appState.cachedAlbumArtists;
-    final albumsSort = appState.albumsSort;
-
-  
-    final albums = cachedAlbums;
+    return ListenableBuilder(
+      listenable: appState,
+      builder: (context, _) {
+        final albums = appState.cachedAlbums;
+        final albumsSort = appState.albumsSort;
 
     String sortLabel(AlbumsSort s) {
       switch (s) {
@@ -249,6 +243,7 @@ class AlbumsTab extends StatelessWidget {
           ],
         ),
       );
-  
+      },
+    );
   }
 }

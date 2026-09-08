@@ -88,6 +88,7 @@ class PlaybackController {
   // ── Play history ───────────────────────────────────────────────────
   final Map<int, int> _playCountBySongId = <int, int>{};
   final Map<int, int> _lastPlayedMsBySongId = <int, int>{};
+  VoidCallback? onPlayHistoryUpdated;
   final Map<int, int> _lastRecordedPlayMsBySongId = <int, int>{};
   Timer? _playHistorySaveDebounce;
   static const int _minPlayRecordIntervalMs = 15000;
@@ -495,6 +496,7 @@ class PlaybackController {
         (_playCountBySongId[songId] ?? 0) + 1;
     _lastPlayedMsBySongId[songId] = now;
     _scheduleSavePlayHistory();
+    onPlayHistoryUpdated?.call();
   }
 
   void _scheduleSavePlayHistory() {
@@ -523,15 +525,14 @@ class PlaybackController {
     Map<int, int> decodedLastPlayed = <int, int>{};
 
     if (loaded != null) {
-      decodedCounts = _decodeIntMap(jsonEncode(loaded['counts']));
-      decodedLastPlayed =
-          _decodeIntMap(jsonEncode(loaded['last_played']));
+      decodedCounts = _extractIntMap(loaded['counts']);
+      decodedLastPlayed = _extractIntMap(loaded['last_played']);
     } else {
       final prefs = await SharedPreferences.getInstance();
       final playCountsRaw = prefs.getString('play_counts_v1');
       final lastPlayedRaw = prefs.getString('last_played_ms_v1');
-      decodedCounts = _decodeIntMap(playCountsRaw);
-      decodedLastPlayed = _decodeIntMap(lastPlayedRaw);
+      decodedCounts = _extractIntMap(playCountsRaw);
+      decodedLastPlayed = _extractIntMap(lastPlayedRaw);
       await AppLocalStore.instance.writePlayHistory(
         counts:
             decodedCounts.map((k, v) => MapEntry(k.toString(), v)),
@@ -548,27 +549,44 @@ class PlaybackController {
     _lastPlayedMsBySongId
       ..clear()
       ..addAll(decodedLastPlayed);
+    onPlayHistoryUpdated?.call();
   }
 
-  Map<int, int> _decodeIntMap(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return <int, int>{};
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return <int, int>{};
-      final out = <int, int>{};
-      for (final entry in decoded.entries) {
-        final key = int.tryParse(entry.key.toString());
-        if (key == null) continue;
-        final value = entry.value;
-        final v =
-            value is int ? value : int.tryParse(value.toString());
-        if (v == null) continue;
-        out[key] = v;
+  Map<int, int> _extractIntMap(dynamic raw) {
+    if (raw == null) return <int, int>{};
+    Map<dynamic, dynamic> map;
+    if (raw is Map) {
+      map = raw;
+    } else if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          map = decoded;
+        } else {
+          return <int, int>{};
+        }
+      } catch (_) {
+        return <int, int>{};
       }
-      return out;
-    } catch (_) {
+    } else {
       return <int, int>{};
     }
+
+    final out = <int, int>{};
+    for (final entry in map.entries) {
+      final key = int.tryParse(entry.key.toString());
+      if (key == null) continue;
+      final val = entry.value;
+      int? v;
+      if (val is num) {
+        v = val.toInt();
+      } else if (val != null) {
+        v = int.tryParse(val.toString()) ?? (double.tryParse(val.toString())?.toInt());
+      }
+      if (v == null) continue;
+      out[key] = v;
+    }
+    return out;
   }
 
   // ── Suppress index updates ─────────────────────────────────────────

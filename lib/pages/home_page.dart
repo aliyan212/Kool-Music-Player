@@ -71,10 +71,7 @@ class _MyHomePageState extends State<MyHomePage> {
           onQueueChanged: (_) {},
           onOpenNowPlaying: (song) => _appState.openNowPlaying(song),
           selectedTabIndex: _appState.selectedTabIndex,
-          onNavigateTab: (i) {
-            _appState.selectedTabIndex = i;
-            _appState.notifyListeners();
-          },
+          onNavigateTab: _appState.selectTab,
         ),
       ),
     );
@@ -127,17 +124,17 @@ class _MyHomePageState extends State<MyHomePage> {
                               showSearchInAppBar: _showSearchInAppBar,
                             ),
                           ),
-                          const KeyedSubtree(
-                            key: PageStorageKey<String>('tab_albums'),
-                            child: AlbumsTab(),
+                          KeyedSubtree(
+                            key: const PageStorageKey<String>('tab_albums'),
+                            child: const AlbumsTab(),
                           ),
-                          const KeyedSubtree(
-                            key: PageStorageKey<String>('tab_artists'),
-                            child: AlbumArtistsTab(),
+                          KeyedSubtree(
+                            key: const PageStorageKey<String>('tab_artists'),
+                            child: const AlbumArtistsTab(),
                           ),
-                          const KeyedSubtree(
-                            key: PageStorageKey<String>('tab_playlists'),
-                            child: PlaylistsTab(),
+                          KeyedSubtree(
+                            key: const PageStorageKey<String>('tab_playlists'),
+                            child: const PlaylistsTab(),
                           ),
                         ],
                       ),

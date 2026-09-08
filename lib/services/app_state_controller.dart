@@ -59,7 +59,12 @@ enum LibraryPermissionState { unknown, granted, denied, permanentlyDenied }
 class AppStateController extends ChangeNotifier {
   final SearchController searchController = SearchController();
   static final AppStateController instance = AppStateController._();
-  AppStateController._();
+  AppStateController._() {
+    _controller.onPlayHistoryUpdated = () {
+      recomputePlayHistoryStats();
+      notifyListeners();
+    };
+  }
   
   BuildContext get context => navigatorKey.currentContext!;
 
@@ -69,6 +74,12 @@ class AppStateController extends ChangeNotifier {
 
 
   late int selectedTabIndex;
+
+  void selectTab(int index) {
+    if (isSelectionMode) exitSelectionMode();
+    selectedTabIndex = index;
+    notifyListeners();
+  }
 
   bool nowPlayingRouteActive = false;
   DateTime? _lastNowPlayingClosedAt;
@@ -456,8 +467,9 @@ class AppStateController extends ChangeNotifier {
       createdAtMs: now,
       updatedAtMs: now,
     );
-    userPlaylists.insert(0, playlist);
-      cachedUserPlaylistTrackCounts[playlist.id] = 0;
+    userPlaylists = <UserPlaylist>[playlist, ...userPlaylists];
+    cachedUserPlaylistTrackCounts[playlist.id] = 0;
+    recomputeAllData();
     notifyListeners();
     await _saveUserPlaylists();
     return playlist;
@@ -467,16 +479,18 @@ class AppStateController extends ChangeNotifier {
     final idx = userPlaylists.indexWhere((p) => p.id == playlist.id);
     if (idx == -1) return;
     userPlaylists[idx] = playlist.copyWith(
-        name: newName,
-        updatedAtMs: DateTime.now().millisecondsSinceEpoch,
-      );
+      name: newName,
+      updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    recomputeAllData();
     notifyListeners();
     await _saveUserPlaylists();
   }
 
   Future<void> deletePlaylist(UserPlaylist playlist) async {
     userPlaylists.removeWhere((p) => p.id == playlist.id);
-      cachedUserPlaylistTrackCounts.remove(playlist.id);
+    cachedUserPlaylistTrackCounts.remove(playlist.id);
+    recomputeAllData();
     notifyListeners();
     await _saveUserPlaylists();
   }

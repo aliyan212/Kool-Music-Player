@@ -53,18 +53,32 @@ class UserPlaylist {
       final songIds = <int>[];
       if (songIdsRaw is List) {
         for (final v in songIdsRaw) {
-          final id = v is int ? v : int.tryParse(v.toString());
-          if (id == null) continue;
-          songIds.add(id);
+          int? songId;
+          if (v is num) {
+            songId = v.toInt();
+          } else if (v != null) {
+            songId = int.tryParse(v.toString()) ?? (double.tryParse(v.toString())?.toInt());
+          }
+          if (songId != null) {
+            songIds.add(songId);
+          }
         }
       }
 
-      final createdAtMs = createdAt is int
-          ? createdAt
-          : int.tryParse(createdAt?.toString() ?? '');
-      final updatedAtMs = updatedAt is int
-          ? updatedAt
-          : int.tryParse(updatedAt?.toString() ?? '');
+      int? createdAtMs;
+      if (createdAt is num) {
+        createdAtMs = createdAt.toInt();
+      } else if (createdAt != null) {
+        createdAtMs = int.tryParse(createdAt.toString()) ?? (double.tryParse(createdAt.toString())?.toInt());
+      }
+
+      int? updatedAtMs;
+      if (updatedAt is num) {
+        updatedAtMs = updatedAt.toInt();
+      } else if (updatedAt != null) {
+        updatedAtMs = int.tryParse(updatedAt.toString()) ?? (double.tryParse(updatedAt.toString())?.toInt());
+      }
+
       final now = DateTime.now().millisecondsSinceEpoch;
 
       return UserPlaylist(

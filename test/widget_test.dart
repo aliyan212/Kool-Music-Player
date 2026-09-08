@@ -10,6 +10,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 
 import 'package:music_player/utils/song_repair_utils.dart';
 import 'package:music_player/utils/format_utils.dart';
+import 'package:music_player/data/models/user_playlist.dart';
 
 void main() {
   test('formatTime formats mm:ss', () {
@@ -98,5 +99,23 @@ void main() {
 
     final repaired = await repairSongMetadataList(list, tagTitle: 'Example Song');
     expect(repaired.single.title, 'Example Song');
+  });
+
+  test('UserPlaylist.fromJson parses ints, doubles and string songIds and timestamps correctly', () {
+    final raw = {
+      'id': 'joke_id',
+      'name': 'joke',
+      'songIds': [64287, 64306.0, '64237'],
+      'createdAtMs': 1725785000000.0,
+      'updatedAtMs': 1725785000000,
+    };
+
+    final playlist = UserPlaylist.fromJson(raw);
+    expect(playlist, isNotNull);
+    expect(playlist!.id, 'joke_id');
+    expect(playlist.name, 'joke');
+    expect(playlist.songIds, [64287, 64306, 64237]);
+    expect(playlist.createdAtMs, 1725785000000);
+    expect(playlist.updatedAtMs, 1725785000000);
   });
 }

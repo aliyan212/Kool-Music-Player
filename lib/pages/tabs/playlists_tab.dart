@@ -3,11 +3,8 @@ import 'package:flutter/services.dart';
 import 'dart:ui' show lerpDouble;
 import '../../pages/playlist_page.dart';
 import '../../services/app_state_controller.dart';
-import '../../ui/shared/bottom_bars_gutter.dart';
 import '../../data/models/user_playlist.dart';
-import 'package:on_audio_query/on_audio_query.dart';
 import '../../services/playback_controller.dart';
-import '../../ui/shared/fast_artwork_widget.dart';
 import '../../dialogs/playlist_dialogs.dart';
 
 class PlaylistsTab extends StatelessWidget {
@@ -16,7 +13,10 @@ class PlaylistsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = AppStateController.instance;
-    final controller = playbackController;
+    return ListenableBuilder(
+      listenable: appState,
+      builder: (context, _) {
+        final controller = playbackController;
     final cachedMostPlayed = appState.cachedMostPlayed;
     final cachedRecentlyPlayed = appState.cachedRecentlyPlayed;
     final cachedRecentlyAdded = appState.cachedRecentlyAdded;
@@ -24,10 +24,9 @@ class PlaylistsTab extends StatelessWidget {
     final userPlaylists = appState.userPlaylists;
     final cachedUserPlaylistTrackCounts = appState.cachedUserPlaylistTrackCounts;
     final selectedTabIndex = appState.selectedTabIndex;
-    final isSelectionMode = appState.isSelectionMode;
     final nowPlayingRouteActive = appState.nowPlayingRouteActive;
 
-  
+
     final cs = Theme.of(context).colorScheme;
 
     final mostPlayedList = cachedMostPlayed;
@@ -67,11 +66,7 @@ class PlaylistsTab extends StatelessWidget {
           playlist: controller.currentPlaylist,
           onQueueChanged: (_) {},
           selectedTabIndex: selectedTabIndex,
-          onNavigateTab: (index) {
-            if (appState.isSelectionMode) appState.exitSelectionMode();
-          appState.selectedTabIndex = index;
-          appState.notifyListeners();
-          },
+          onNavigateTab: appState.selectTab,
           embeddedInHome: true,
           onClose: appState.closeInlineDetail,
           onOpenNowPlaying: (s) {
@@ -418,5 +413,7 @@ class PlaylistsTab extends StatelessWidget {
           const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],
       );
+      },
+    );
   }
 }
