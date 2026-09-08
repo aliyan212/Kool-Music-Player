@@ -18,10 +18,11 @@ Widget buildBottomBarsGutter(
   bool includeMiniPlayer = true,
   double extraPadding = 0,
 }) {
-  // Gutter space matches the standard height of a card across the app (80px).
+  // Gutter space set to 2.5 cards height (standard card is 80px -> 200px total).
   const double cardHeight = 80.0;
+  const double gutterHeight = cardHeight * 2.5;
   return SliverToBoxAdapter(
-    child: SizedBox(height: cardHeight + extraPadding),
+    child: SizedBox(height: gutterHeight + extraPadding),
   );
 }
 
