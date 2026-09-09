@@ -424,7 +424,6 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = cs.surface;
     // Make the header use the same background so the top bar matches the page.
     final headerBgColor = bgColor;

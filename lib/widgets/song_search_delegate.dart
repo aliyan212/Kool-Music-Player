@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
-import '../main.dart';
 import '../ui/shared/fast_artwork_widget.dart';
+import '../utils/format_utils.dart';
 
 
 class SongSearchDelegate extends SearchDelegate {
@@ -44,13 +44,12 @@ class SongSearchDelegate extends SearchDelegate {
   Widget buildSuggestions(BuildContext context) => _buildList(context);
 
   Widget _buildList(BuildContext context) {
-    final q = query.toLowerCase();
     final q = query.trim().toLowerCase();
 
     final results = songs.where((song) {
       final title = song.title.toLowerCase();
       final artist = (song.artist ?? '').toLowerCase();
-      return title.startsWith(q) || artist.startsWith(q);
+      return title.contains(q) || artist.contains(q);
     }).toList(growable: false);
 
     return ListView.builder(
@@ -72,12 +71,9 @@ class SongSearchDelegate extends SearchDelegate {
         return ListTile(
           leading: ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: QueryArtworkWidget(
             child: FastArtworkWidget(
               id: song.id,
               type: ArtworkType.AUDIO,
-              artworkWidth: 40,
-              artworkHeight: 40,
               width: 40,
               height: 40,
               keepOldArtwork: true,

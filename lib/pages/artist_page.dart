@@ -8,7 +8,7 @@ import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/format_utils.dart';
 import '../ui/shared/bottom_bars_gutter.dart';
 
-class ArtistPage extends StatefulWidget {
+class ArtistPage extends StatelessWidget {
   final AudioPlayer player;
   final String artistName;
   final List<ArtistAlbum> albums;
@@ -37,9 +37,6 @@ class ArtistPage extends StatefulWidget {
     required this.onOpenAlbum,
     required this.onPlayAll,
   });
-
-  @override
-  State<ArtistPage> createState() => _ArtistPageState();
 
   int _totalTracks() {
     int sum = 0;
@@ -264,13 +261,6 @@ class ArtistPage extends StatefulWidget {
       ),
       body: content,
     );
-  }
-}
-
-class _ArtistPageState extends State<ArtistPage> {
-  @override
-  Widget build(BuildContext context) {
-    return widget.build(context);
   }
 }
 

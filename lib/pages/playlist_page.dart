@@ -381,7 +381,6 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
 
   Future<({Color primary, Color secondary, Color tertiary})?>? _paletteFuture;
   int? _paletteSongId;
-  Brightness? _lastBrightness;
 
   static Future<({Color primary, Color secondary, Color tertiary})?> _loadPlaylistPalette(
     int songId,
@@ -686,8 +685,6 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
     }
   }
 
-  static final RegExp _playlistYearRegex = RegExp(r'(19|20)\d{2}');
-
 
 
 
@@ -892,7 +889,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                     Expanded(
                       child: ListView.separated(
                         itemCount: widget.librarySongs.length,
-                        separatorBuilder: (_, __) => const Padding(
+                        separatorBuilder: (_, _) => const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 16),
                           child: Divider(height: 1),
                         ),

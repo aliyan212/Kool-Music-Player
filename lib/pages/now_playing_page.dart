@@ -65,9 +65,6 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   Color? _primaryColor;
   Color? _secondaryColor;
   Color? _tertiaryColor;
-  Color? _prevPrimaryColor;
-  Color? _prevSecondaryColor;
-  Color? _prevTertiaryColor;
   late SongModel _displayedSong;
   bool _showLyrics = false;
   String? _rawLyrics;
@@ -79,7 +76,6 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   StreamSubscription<int?>? _indexSub;
   bool _autoScrollEnabled = true;
   Timer? _resumeAutoScrollTimer;
-  final Map<int, GlobalKey> _lyricLineKeys = {};
 
   Timer? _paletteDebounceTimer;
   Timer? _paletteLockTimer;
@@ -332,9 +328,6 @@ class _NowPlayingPageState extends State<NowPlayingPage>
         }
         _showLyrics = false;
         _currentLyricIndex = -1;
-        _prevPrimaryColor = _primaryColor;
-        _prevSecondaryColor = _secondaryColor;
-        _prevTertiaryColor = _tertiaryColor;
       });
       WakelockPlus.disable();
       _scheduleArtworkBytesUpdate(newSong.id);
@@ -400,8 +393,9 @@ class _NowPlayingPageState extends State<NowPlayingPage>
               mounted &&
               appIsForeground.value &&
               !_disableMotion) {
-            if (!_bgGradientController.isAnimating)
+            if (!_bgGradientController.isAnimating) {
               _bgGradientController.repeat();
+            }
           } else if (status == AnimationStatus.reverse && mounted) {
             if (_bgGradientController.isAnimating) _bgGradientController.stop();
           }
@@ -1310,9 +1304,6 @@ class _NowPlayingPageState extends State<NowPlayingPage>
         ? const Color(0xFF0F1014)
         : cs.surfaceContainer;
     final defaultAccentColor = cs.primary;
-    final defaultBottomColor = isDark
-        ? const Color(0xFF0C0D10)
-        : cs.surface;
 
     final targetTopColor = _primaryColor != null
         ? adjustColorForTheme(_primaryColor!)
@@ -1324,11 +1315,6 @@ class _NowPlayingPageState extends State<NowPlayingPage>
         ? adjustColorForTheme(_tertiaryColor!)
         : Color.lerp(targetTopColor, targetMidColor, 0.45) ??
               defaultAccentColor;
-    final hasColors =
-        _primaryColor != null &&
-        _secondaryColor != null &&
-        _tertiaryColor != null;
-    final bottomColor = hasColors ? cs.surface : defaultBottomColor;
 
     final textColor = isDark ? Colors.white : Colors.black87;
     final textColorSecondary = isDark ? Colors.white70 : Colors.black54;
@@ -1557,7 +1543,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                 context,
                                 PageRouteBuilder(
                                   opaque: false,
-                                  pageBuilder: (_, __, ___) => QueuePage(
+                                  pageBuilder: (_, _, _) => QueuePage(
                                     player: widget.player,
                                     songs: widget.songs,
                                     currentIndex:
@@ -2094,30 +2080,6 @@ class _NowPlayingPageState extends State<NowPlayingPage>
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCircleButton(
-    IconData icon,
-    Color color,
-    VoidCallback? onPressed, {
-    double size = 24,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: onPressed == null
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                onPressed();
-              },
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Icon(icon, color: color, size: size),
         ),
       ),
     );

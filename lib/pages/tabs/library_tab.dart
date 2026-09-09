@@ -158,10 +158,11 @@ class LibraryTab extends StatelessWidget {
                               for (final s in firstSongByArtist.values) {
                                 if (exact(s.artist)) {
                                   exactMatches.add(s);
-                                } else if (starts(s.artist))
+                                } else if (starts(s.artist)) {
                                   startMatches.add(s);
-                                else if (contains(s.artist))
+                                } else if (contains(s.artist)) {
                                   containMatches.add(s);
+                                }
                               }
                               return [
                                 ...exactMatches,
@@ -189,10 +190,11 @@ class LibraryTab extends StatelessWidget {
                               for (final s in firstSongByAlbumId.values) {
                                 if (exact(s.album)) {
                                   exactMatches.add(s);
-                                } else if (starts(s.album))
+                                } else if (starts(s.album)) {
                                   startMatches.add(s);
-                                else if (contains(s.album))
+                                } else if (contains(s.album)) {
                                   containMatches.add(s);
+                                }
                               }
                               return [
                                 ...exactMatches,
@@ -211,10 +213,11 @@ class LibraryTab extends StatelessWidget {
                               for (final s in songs) {
                                 if (exact(s.title)) {
                                   exactMatches.add(s);
-                                } else if (starts(s.title))
+                                } else if (starts(s.title)) {
                                   startMatches.add(s);
-                                else if (contains(s.title))
+                                } else if (contains(s.title)) {
                                   containMatches.add(s);
+                                }
                               }
                               return [
                                 ...exactMatches,

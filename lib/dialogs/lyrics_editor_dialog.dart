@@ -234,7 +234,6 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
     final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0.0;

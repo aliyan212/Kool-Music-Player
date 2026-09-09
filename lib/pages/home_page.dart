@@ -81,7 +81,7 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: !_appState.isSelectionMode && _appState.inlineDetailContent == null,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_appState.isSelectionMode) {
           HapticFeedback.selectionClick();

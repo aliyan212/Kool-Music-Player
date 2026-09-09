@@ -18,7 +18,6 @@ import 'pages/about_page.dart';
 import 'pages/boot_page.dart';
 import 'pages/home_page.dart';
 import 'services/app_lifecycle_observer.dart';
-import 'services/playback_controller.dart';
 
 AppAudioHandler? audioHandler;
 Future<dynamic>? audioHandlerInitFuture;

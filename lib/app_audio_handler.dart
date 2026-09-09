@@ -77,7 +77,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   bool _suspendStateUpdates = false;
 
   AudioSession? _session;
-  DateTime? _duckStartedAt;
   DateTime? _lastPlaybackProgressAt;
   Duration? _lastPlaybackPosition;
   DateTime? _lastPlaybackRecoveryAt;
@@ -215,7 +214,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       switch (event.type) {
         case AudioInterruptionType.duck:
           if (!_ducked) {
-            _duckStartedAt = DateTime.now();
             _baselineVolume = player.volume.clamp(0.0, 1.0);
             if (_baselineVolume <= 0.001) _baselineVolume = 1.0;
 
@@ -277,7 +275,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       case AudioInterruptionType.duck:
         if (_ducked) {
           _ducked = false;
-          _duckStartedAt = null;
           _duckFailsafeTimer?.cancel();
           _duckFailsafeTimer = null;
           _setFocusState(AudioFocusState.gained);

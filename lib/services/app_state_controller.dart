@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import '../dialogs/playlist_dialogs.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +10,6 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:audio_service/audio_service.dart';
 
 import '../android_notifications.dart';
 import '../data/models/album_stat.dart';
@@ -24,24 +22,15 @@ import '../platform_exit.dart';
 import '../services/app_local_store.dart';
 import '../services/local_audio_scanner.dart';
 import '../services/playback_controller.dart';
-import '../ui/shared/bottom_bars_gutter.dart';
 import '../ui/shared/fast_artwork_widget.dart';
-import '../utils/format_utils.dart';
-import '../utils/palette_compute.dart';
 import '../utils/song_sort_utils.dart';
 import '../utils/tag_write_access.dart';
-import '../widgets/mini_player.dart';
 import '../widgets/song_options_sheet.dart';
 
-import '../pages/about_page.dart';
 import '../pages/album_page.dart';
 import '../pages/artist_page.dart';
 import '../pages/now_playing_page.dart';
 import '../pages/playlist_page.dart';
-import '../pages/tabs/album_artists_tab.dart';
-import '../pages/tabs/albums_tab.dart';
-import '../pages/tabs/library_tab.dart';
-import '../pages/tabs/playlists_tab.dart';
 
 const List<String> _defaultExcludedFolderFragments = [
   '/storage/emulated/0/Ringtones',
@@ -119,10 +108,8 @@ class AppStateController extends ChangeNotifier {
   Map<String, int> cachedUserPlaylistTrackCounts = <String, int>{};
 
   bool hideBottomBars = false;
-  DateTime? _lastBottomBarsToggleAt;
   Widget? inlineDetailContent;
 
-  static final RegExp _yearRegex = RegExp(r'\b(19\d{2}|20\d{2})\b');
 
   
 
@@ -434,8 +421,7 @@ class AppStateController extends ChangeNotifier {
       if (decoded == null) {
         userPlaylists = <UserPlaylist>[];
         recomputeAllData();
-        if (true) 
-    notifyListeners();
+        notifyListeners();
         return;
       }
 
@@ -447,13 +433,11 @@ class AppStateController extends ChangeNotifier {
       }
       userPlaylists = list;
       recomputeAllData();
-      if (true) 
-    notifyListeners();
+      notifyListeners();
     } catch (_) {
       userPlaylists = <UserPlaylist>[];
       recomputeAllData();
-      if (true) 
-    notifyListeners();
+      notifyListeners();
     }
   }
 
@@ -888,10 +872,7 @@ class AppStateController extends ChangeNotifier {
     return true;
   }
 
-  // Thin wrappers — delegates to PlaybackController.
-  Uri _songUri(SongModel song) => _controller.songUri(song);
-  MediaItem _toMediaItem(SongModel song) => _controller.toMediaItem(song);
-  int? _songIdFromTag(dynamic tag) => _controller.songIdFromTag(tag);
+
 
   
 
@@ -984,7 +965,6 @@ class AppStateController extends ChangeNotifier {
   Future<void> _loadPlayHistory() async {
     await _controller.loadPlayHistory();
     recomputeAllData();
-    if (true) 
     notifyListeners();
   }
 
@@ -1185,8 +1165,9 @@ class AppStateController extends ChangeNotifier {
     String albumKeyFor(SongModel s) {
       final artist = albumArtistFor(s, albumMap[s.albumId]);
       final album = normalize(albumFor(s, albumMap[s.albumId]));
-      if (album.isNotEmpty)
+      if (album.isNotEmpty) {
         return '${artist.toLowerCase()}\u0000${album.toLowerCase()}';
+      }
       final aid = s.albumId;
       if (aid != null && aid > 0) return 'id_$aid';
       return 'song_${s.id}';
@@ -1412,14 +1393,6 @@ class AppStateController extends ChangeNotifier {
     return list;
   }
 
-  String _folderDisplayName(String path) {
-    final trimmed = path.endsWith('/')
-        ? path.substring(0, path.length - 1)
-        : path;
-    final parts = trimmed.split('/').where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return trimmed;
-    return parts.last;
-  }
 
   Future<void> loadIncludedFolders() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1516,7 +1489,6 @@ class AppStateController extends ChangeNotifier {
     await _controller.applySort(mode);
     songs = _controller.songs;
     recomputeAllData();
-    if (true) 
     notifyListeners();
   }
 
