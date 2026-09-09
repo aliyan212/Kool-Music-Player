@@ -681,18 +681,9 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       if (!mounted) return;
       final idx = _activeLyricIndexForPosition(widget.player.position);
       if (_lyricItemScrollController.isAttached) {
-        int targetIndex = idx;
-        double targetAlignment = 0.40;
-        if (idx < 3) {
-          targetIndex = 0;
-          targetAlignment = 0.05;
-        }
         _lyricItemScrollController.jumpTo(
-          index: targetIndex.clamp(
-            0,
-            (_lrcLines.isEmpty ? 0 : _lrcLines.length - 1),
-          ),
-          alignment: targetAlignment,
+          index: idx.clamp(0, _lrcLines.length - 1),
+          alignment: _alignmentForLine(idx),
         );
       }
     });
@@ -886,28 +877,25 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     } catch (_) {}
   }
 
+  double _alignmentForLine(int index) {
+    if (index < 0 || index >= _lrcLines.length) return 0.36;
+    final len = _lrcLines[index].content.trim().length;
+    if (len <= 36) return 0.36;
+    if (len <= 75) return 0.30;
+    if (len <= 120) return 0.25;
+    return 0.20;
+  }
+
   void _scrollToActiveLine(int index) {
     if (!_lyricItemScrollController.isAttached) return;
+    if (index < 0 || index >= _lrcLines.length) return;
 
-    int targetIndex = index;
-    double targetAlignment = 0.40;
-
-    // Prevent scrolling for the first few lines so they just light up in place
-    // without forcing the list to scroll unnecessarily.
-    if (index < 3) {
-      targetIndex = 0;
-      targetAlignment = 0.05;
-    }
-
-    // ScrollablePositionedList can jump/scroll to offscreen items efficiently.
+    // Smooth physics-based gliding scroll with gentle easing curve
     _lyricItemScrollController.scrollTo(
-      index: targetIndex.clamp(
-        0,
-        (_lrcLines.isEmpty ? 0 : _lrcLines.length - 1),
-      ),
-      alignment: targetAlignment,
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeOutCubic,
+      index: index,
+      alignment: _alignmentForLine(index),
+      duration: const Duration(milliseconds: 650),
+      curve: Curves.easeInOutCubic,
     );
   }
 
@@ -2290,32 +2278,62 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     } else {
       lyricsContent = LayoutBuilder(
         builder: (context, constraints) {
-          return NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              if (notification is ScrollStartNotification ||
-                  notification is UserScrollNotification) {
-                _pauseAutoScroll();
-              }
-              return false;
+          final topPadding = constraints.maxHeight * 0.32;
+          final bottomPadding = constraints.maxHeight * 0.48;
+          final initialIdx = _currentLyricIndex >= 0 ? _currentLyricIndex : 0;
+
+          return ShaderMask(
+            shaderCallback: (Rect bounds) {
+              return const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.white,
+                  Colors.white,
+                  Colors.transparent,
+                ],
+                stops: [0.0, 0.12, 0.88, 1.0],
+              ).createShader(bounds);
             },
-            child: ScrollablePositionedList.builder(
-              itemScrollController: _lyricItemScrollController,
-              itemPositionsListener: _lyricItemPositionsListener,
-              itemCount: _lrcLines.length,
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              physics: const BouncingScrollPhysics(),
-              itemBuilder: (context, index) {
-                final line = _lrcLines[index];
-                return _LyricLineTile(
-                  index: index,
-                  line: line,
-                  activeIndex: _activeLyricIndex,
-                  onTap: () {
-                    _pauseAutoScroll();
-                    widget.player.seek(line.time);
-                  },
-                );
+            blendMode: BlendMode.dstIn,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollStartNotification ||
+                    notification is UserScrollNotification) {
+                  _pauseAutoScroll();
+                }
+                return false;
               },
+              child: ScrollablePositionedList.builder(
+                itemScrollController: _lyricItemScrollController,
+                itemPositionsListener: _lyricItemPositionsListener,
+                initialScrollIndex: initialIdx.clamp(
+                  0,
+                  _lrcLines.isNotEmpty ? _lrcLines.length - 1 : 0,
+                ),
+                initialAlignment: _alignmentForLine(initialIdx),
+                itemCount: _lrcLines.length,
+                padding: EdgeInsets.only(
+                  top: topPadding,
+                  bottom: bottomPadding,
+                  left: 20,
+                  right: 20,
+                ),
+                physics: const BouncingScrollPhysics(),
+                itemBuilder: (context, index) {
+                  final line = _lrcLines[index];
+                  return _LyricLineTile(
+                    index: index,
+                    line: line,
+                    activeIndex: _activeLyricIndex,
+                    onTap: () {
+                      _pauseAutoScroll();
+                      widget.player.seek(line.time);
+                    },
+                  );
+                },
+              ),
             ),
           );
         },
@@ -2348,6 +2366,8 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   }
 }
 
+enum _LyricTileMode { active, adjacent, near, far }
+
 class _LyricLineTile extends StatefulWidget {
   final int index;
   final LyricLine line;
@@ -2366,16 +2386,14 @@ class _LyricLineTile extends StatefulWidget {
 }
 
 class _LyricLineTileState extends State<_LyricLineTile> {
-  static const int _nearWindow = 2;
-
   late _LyricTileMode _mode;
 
   _LyricTileMode _computeMode(int active) {
-    if (widget.index == active) return _LyricTileMode.active;
-    if ((widget.index - active).abs() <= _nearWindow) {
-      return _LyricTileMode.near;
-    }
-    return _LyricTileMode.normal;
+    final diff = (widget.index - active).abs();
+    if (diff == 0) return _LyricTileMode.active;
+    if (diff == 1) return _LyricTileMode.adjacent;
+    if (diff == 2) return _LyricTileMode.near;
+    return _LyricTileMode.far;
   }
 
   void _handleActiveChanged() {
@@ -2412,40 +2430,79 @@ class _LyricLineTileState extends State<_LyricLineTile> {
   @override
   Widget build(BuildContext context) {
     final isActive = _mode == _LyricTileMode.active;
-    final isNear = _mode == _LyricTileMode.near;
-    final opacity = isActive ? 1.0 : (isNear ? 0.75 : 0.55);
-    final scale = isActive ? 1.0 : (isNear ? 0.98 : 0.96);
-    final weight = isActive ? FontWeight.w700 : FontWeight.w500;
+    final double opacity;
+    final double scale;
+    switch (_mode) {
+      case _LyricTileMode.active:
+        opacity = 1.0;
+        scale = 1.0;
+        break;
+      case _LyricTileMode.adjacent:
+        opacity = 0.56;
+        scale = 0.97;
+        break;
+      case _LyricTileMode.near:
+        opacity = 0.36;
+        scale = 0.94;
+        break;
+      case _LyricTileMode.far:
+        opacity = 0.22;
+        scale = 0.92;
+        break;
+    }
+
     final shadows = isActive
         ? <Shadow>[
             Shadow(
-              color: Colors.white.withValues(alpha: 0.28),
-              blurRadius: 14,
+              color: Colors.white.withValues(alpha: 0.45),
+              blurRadius: 18,
               offset: Offset.zero,
             ),
+            Shadow(
+              color: Colors.black.withValues(alpha: 0.40),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
           ]
-        : const <Shadow>[];
+        : <Shadow>[
+            Shadow(
+              color: Colors.black.withValues(alpha: 0.28),
+              blurRadius: 6,
+              offset: const Offset(0, 1),
+            ),
+          ];
 
-    return InkWell(
-      onTap: widget.onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0),
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 220),
-          opacity: opacity,
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 220),
-            scale: scale,
-            child: Text(
-              widget.line.content,
-              textAlign: TextAlign.center,
-              softWrap: true,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: weight,
-                height: 1.30,
-                shadows: shadows,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          widget.onTap();
+        },
+        borderRadius: BorderRadius.circular(18),
+        splashColor: Colors.white12,
+        highlightColor: Colors.white.withValues(alpha: 0.05),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+            opacity: opacity,
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+              scale: scale,
+              child: Text(
+                widget.line.content,
+                textAlign: TextAlign.center,
+                softWrap: true,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  height: 1.38,
+                  shadows: shadows,
+                ),
               ),
             ),
           ),
@@ -2454,8 +2511,6 @@ class _LyricLineTileState extends State<_LyricLineTile> {
     );
   }
 }
-
-enum _LyricTileMode { active, near, normal }
 
 class _SnappyArtworkScrollPhysics extends ScrollPhysics {
   final int itemCount;
