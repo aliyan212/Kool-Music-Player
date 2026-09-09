@@ -1454,14 +1454,30 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                 ],
                               ),
                             ),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                buildBlob(x1, y1, c1, 1.25),
-                                buildBlob(x2, y2, c2, 1.30),
-                                buildBlob(x3, y3, c3, 1.15),
-                                buildBlob(x4, y4, c2, 1.35),
-                              ],
+                            child: ClipRect(
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  RepaintBoundary(
+                                    child: ImageFiltered(
+                                      imageFilter: ImageFilter.blur(
+                                        sigmaX: 42,
+                                        sigmaY: 42,
+                                        tileMode: TileMode.decal,
+                                      ),
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          buildBlob(x1, y1, c1, 1.25),
+                                          buildBlob(x2, y2, c2, 1.30),
+                                          buildBlob(x3, y3, c3, 1.15),
+                                          buildBlob(x4, y4, c2, 1.35),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           );
 
@@ -2175,7 +2191,9 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
         if (!isFullscreen && songId == _displayedSong.id) {
           return Hero(
-            tag: 'mini_artwork_$songId',
+            tag: 'now_playing_artwork_$songId',
+            createRectTween: (begin, end) =>
+                MaterialRectArcTween(begin: begin, end: end),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(28),
               child: artworkWidget,
@@ -2243,19 +2261,17 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   }
 
   Widget _buildLyricsView() {
+    Widget lyricsContent;
     if (_rawLyrics == null) {
-      return Container(
+      lyricsContent = Container(
         alignment: Alignment.center,
         child: const Text(
           "No Lyrics Found",
           style: TextStyle(color: Colors.white54, fontSize: 18),
         ),
       );
-    }
-
-    // Non-synced lyrics: keep it simple (no auto-scroll).
-    if (!_isSynced || _lrcLines.isEmpty) {
-      return Padding(
+    } else if (!_isSynced || _lrcLines.isEmpty) {
+      lyricsContent = Padding(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -2271,39 +2287,63 @@ class _NowPlayingPageState extends State<NowPlayingPage>
           ),
         ),
       );
+    } else {
+      lyricsContent = LayoutBuilder(
+        builder: (context, constraints) {
+          return NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollStartNotification ||
+                  notification is UserScrollNotification) {
+                _pauseAutoScroll();
+              }
+              return false;
+            },
+            child: ScrollablePositionedList.builder(
+              itemScrollController: _lyricItemScrollController,
+              itemPositionsListener: _lyricItemPositionsListener,
+              itemCount: _lrcLines.length,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              physics: const BouncingScrollPhysics(),
+              itemBuilder: (context, index) {
+                final line = _lrcLines[index];
+                return _LyricLineTile(
+                  index: index,
+                  line: line,
+                  activeIndex: _activeLyricIndex,
+                  onTap: () {
+                    _pauseAutoScroll();
+                    widget.player.seek(line.time);
+                  },
+                );
+              },
+            ),
+          );
+        },
+      );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            if (notification is ScrollStartNotification ||
-                notification is UserScrollNotification) {
-              _pauseAutoScroll();
-            }
-            return false;
-          },
-          child: ScrollablePositionedList.builder(
-            itemScrollController: _lyricItemScrollController,
-            itemPositionsListener: _lyricItemPositionsListener,
-            itemCount: _lrcLines.length,
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            physics: const BouncingScrollPhysics(),
-            itemBuilder: (context, index) {
-              final line = _lrcLines[index];
-              return _LyricLineTile(
-                index: index,
-                line: line,
-                activeIndex: _activeLyricIndex,
-                onTap: () {
-                  _pauseAutoScroll();
-                  widget.player.seek(line.time);
-                },
-              );
-            },
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_displayedArtworkBytes != null)
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36),
+                child: Opacity(
+                  opacity: 0.18,
+                  child: Image.memory(
+                    _displayedArtworkBytes!,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  ),
+                ),
+              ),
+            ),
           ),
-        );
-      },
+        lyricsContent,
+      ],
     );
   }
 }

@@ -1589,7 +1589,7 @@ class AppStateController extends ChangeNotifier {
           barrierDismissible: false,
           barrierColor: Colors.transparent,
           barrierLabel: 'Now Playing',
-          transitionDuration: const Duration(milliseconds: 350),
+          transitionDuration: const Duration(milliseconds: 360),
           reverseTransitionDuration: const Duration(milliseconds: 300),
           pageBuilder: (_, _, _) => NowPlayingPage(
             player: _controller.player,
@@ -1601,7 +1601,7 @@ class AppStateController extends ChangeNotifier {
             onSongUpdated: updateSongMetadataInPlace,
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            final curve = CurveTween(curve: Curves.easeOutCubic);
+            final curve = CurveTween(curve: Curves.fastOutSlowIn);
             final fade = Tween<double>(begin: 0.0, end: 1.0).chain(curve);
 
             // When returning to the miniplayer (reverse transition / pop),

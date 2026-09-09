@@ -471,21 +471,69 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
                   Row(
                     children: [
                       Expanded(
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              HapticFeedback.selectionClick();
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onVerticalDragEnd: (details) {
+                            if (details.primaryVelocity != null &&
+                                details.primaryVelocity! < -180) {
+                              HapticFeedback.mediumImpact();
                               widget.onTap();
-                            },
-                            borderRadius: BorderRadius.circular(24),
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 10),
-                              child: Row(
-                                children: [
-                                  Hero(
-                                    tag: 'mini_artwork_${widget.song.id}',
-                                    child: Container(
+                            }
+                          },
+                          onScaleUpdate: (details) {
+                            if (details.scale > 1.08) {
+                              HapticFeedback.mediumImpact();
+                              widget.onTap();
+                            }
+                          },
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                widget.onTap();
+                              },
+                              borderRadius: BorderRadius.circular(24),
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 10),
+                                child: Row(
+                                  children: [
+                                    Hero(
+                                      tag: 'now_playing_artwork_${widget.song.id}',
+                                      createRectTween: (begin, end) =>
+                                          MaterialRectArcTween(
+                                            begin: begin,
+                                            end: end,
+                                          ),
+                                      flightShuttleBuilder: (
+                                        flightContext,
+                                        animation,
+                                        flightDirection,
+                                        fromHeroContext,
+                                        toHeroContext,
+                                      ) {
+                                        final curved = CurvedAnimation(
+                                          parent: animation,
+                                          curve: Curves.fastOutSlowIn,
+                                        );
+                                        return AnimatedBuilder(
+                                          animation: curved,
+                                          builder: (context, _) {
+                                            final radius = BorderRadius.lerp(
+                                              BorderRadius.circular(14),
+                                              BorderRadius.circular(28),
+                                              curved.value,
+                                            );
+                                            return ClipRRect(
+                                              borderRadius:
+                                                  radius ??
+                                                  BorderRadius.circular(20),
+                                              child: toHeroContext.widget,
+                                            );
+                                          },
+                                        );
+                                      },
+                                      child: Container(
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(14),
                                         boxShadow: [
@@ -610,6 +658,7 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
                             ),
                           ),
                         ),
+                      ),
                       ),
                       _buildControlButton(
                         Icons.skip_previous_rounded,
