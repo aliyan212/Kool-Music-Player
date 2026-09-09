@@ -55,6 +55,14 @@ class AlbumArtistsTab extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.search_rounded),
+                  tooltip: 'Search',
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    appState.openSearch();
+                  },
+                ),
                 PopupMenuButton<AlbumArtistsSort>(
                   icon: const Icon(Icons.sort_rounded),
                   tooltip: 'Sort',

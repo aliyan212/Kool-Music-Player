@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
-import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 /// Describes the current audio focus relationship with the OS.
@@ -72,7 +71,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   StreamSubscription<void>? _becomingNoisySub;
   Timer? _positionUpdateTimer;
   Timer? _duckFailsafeTimer;
-  Timer? _permanentLossTimer;
 
   bool _suspendStateUpdates = false;
 
@@ -84,6 +82,7 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   bool _ducked = false;
   double _preDuckVolume = 1.0;
   double _baselineVolume = 1.0;
+  bool _playInterruptedByFocus = false;
 
   DateTime? _lastMuteRecoveryAt;
 
@@ -102,16 +101,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _focusState = newState;
     _audioFocusStateController.add(newState);
   }
-
-  /// Android maps focus events through [AudioInterruptionEvent].
-  ///   AUDIOFOCUS_LOSS                    → pause begin (no end — permanent)
-  ///   AUDIOFOCUS_LOSS_TRANSIENT          → pause begin then end (transient)
-  ///   AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK → duck begin then end
-  ///
-  /// Since [audio_session] maps both LOSS and LOSS_TRANSIENT to
-  /// [AudioInterruptionType.pause], we use a timer: if the "end" event
-  /// doesn't arrive within [permanentLossTimeout], treat the loss as permanent.
-  static const Duration permanentLossTimeout = Duration(seconds: 6);
 
   // ── Volume helpers ─────────────────────────────────────────────────
 
@@ -195,9 +184,14 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       _baselineVolume = player.volume.clamp(0.0, 1.0);
 
-      // Headphones unplugged / BT disconnect → pause.
-      _becomingNoisySub ??= session.becomingNoisyEventStream.listen((_) {
-        player.pause();
+      // Headphones unplugged / BT disconnect → pause smoothly.
+      _becomingNoisySub ??= session.becomingNoisyEventStream.listen((_) async {
+        if (player.playing) {
+          try {
+            await player.pause();
+          } catch (_) {}
+          _broadcastState();
+        }
       });
 
       _interruptionSub ??= session.interruptionEventStream.listen(
@@ -242,29 +236,28 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           break;
 
         case AudioInterruptionType.pause:
-        case AudioInterruptionType.unknown:
-          // Pause the player and start a timer. If the "end" event
-          // doesn't arrive within permanentLossTimeout, treat this as
-          // AUDIOFOCUS_LOSS (permanent) rather than LOSS_TRANSIENT.
-          if (player.playing) {
-            await player.pause();
-          }
+          // Transient focus loss (e.g. phone call, assistant prompt, transient audio from another app).
+          final wasPlaying = player.playing;
+          _playInterruptedByFocus = wasPlaying;
           _setFocusState(AudioFocusState.transientLoss);
-
-          // Start permanent-loss detection timer.
-          _permanentLossTimer?.cancel();
-          _permanentLossTimer = Timer(permanentLossTimeout, () {
-            // No "end" event arrived — this is permanent focus loss.
-            _setFocusState(AudioFocusState.permanentLoss);
-            debugPrint(
-              'Audio focus: permanent loss detected (no end event within '
-              '${permanentLossTimeout.inSeconds}s). Stopping player.',
-            );
-            // Abandon audio focus entirely.
+          if (wasPlaying) {
             try {
-              _session?.setActive(false);
+              await player.pause();
             } catch (_) {}
-          });
+            _broadcastState();
+          }
+          break;
+
+        case AudioInterruptionType.unknown:
+          // Permanent focus loss (e.g. AndroidAudioFocus.loss - another audio app took exclusive playback).
+          _playInterruptedByFocus = false;
+          _setFocusState(AudioFocusState.permanentLoss);
+          if (player.playing) {
+            try {
+              await player.pause();
+            } catch (_) {}
+            _broadcastState();
+          }
           break;
       }
       return;
@@ -284,23 +277,24 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       case AudioInterruptionType.pause:
       case AudioInterruptionType.unknown:
-        _permanentLossTimer?.cancel();
-        _permanentLossTimer = null;
+        final shouldResume = _playInterruptedByFocus;
+        _playInterruptedByFocus = false;
+        _setFocusState(AudioFocusState.gained);
 
-        // Only resume if this was a transient loss (not permanent).
-        if (_focusState == AudioFocusState.transientLoss) {
+        if (shouldResume) {
           try {
-            await Future<void>.delayed(const Duration(milliseconds: 250));
             await _session?.setActive(true);
           } catch (_) {}
           try {
             await _setNormalVolume();
           } catch (_) {}
-          await player.play();
-          _lastPlaybackProgressAt = DateTime.now();
-          _lastPlaybackPosition = player.position;
+          try {
+            await player.play();
+            _lastPlaybackProgressAt = DateTime.now();
+            _lastPlaybackPosition = player.position;
+          } catch (_) {}
+          _broadcastState();
         }
-        _setFocusState(AudioFocusState.gained);
         break;
     }
   }
@@ -312,8 +306,6 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _positionUpdateTimer = null;
     _duckFailsafeTimer?.cancel();
     _duckFailsafeTimer = null;
-    _permanentLossTimer?.cancel();
-    _permanentLossTimer = null;
     await _playerStateSub?.cancel();
     await _currentIndexSub?.cancel();
     await _sequenceStateSub?.cancel();

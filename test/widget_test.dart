@@ -143,6 +143,20 @@ void main() {
     expect(appState.selectedTabIndex, 3);
   });
 
+  test('AppStateController.openSearch switches to tab 0 and clears inlineDetailContent', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final appState = AppStateController.instance;
+
+    appState.selectedTabIndex = 2;
+    appState.inlineDetailContent = const Text('Artist Detail');
+    expect(appState.selectedTabIndex, 2);
+    expect(appState.inlineDetailContent, isNotNull);
+
+    appState.openSearch();
+    expect(appState.selectedTabIndex, 0);
+    expect(appState.inlineDetailContent, isNull);
+  });
+
   testWidgets('PageController with keepPage false mounts at correct target page without stale offset', (tester) async {
     int activePage = 1;
     PageController controller = PageController(initialPage: activePage, keepPage: false);

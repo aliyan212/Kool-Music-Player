@@ -368,8 +368,19 @@ class AppStateController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void openSearch() {
+    if (selectedTabIndex != 0) {
+      selectTab(0);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (searchController.isAttached && !searchController.isOpen) {
+        searchController.openView();
+      }
+    });
+  }
+
   void enterSelectionMode({int? initialSongId}) {
-    if (searchController.isOpen) {
+    if (searchController.isAttached && searchController.isOpen) {
       searchController.closeView(searchController.text);
       FocusManager.instance.primaryFocus?.unfocus();
     }

@@ -195,6 +195,16 @@ class PlaylistsTab extends StatelessWidget {
               color: cs.onSurface,
               fontWeight: FontWeight.w700,
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.search_rounded),
+                tooltip: 'Search',
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  appState.openSearch();
+                },
+              ),
+            ],
           ),
           SliverToBoxAdapter(
             child: Padding(

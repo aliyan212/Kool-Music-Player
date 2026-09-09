@@ -18,7 +18,7 @@ import 'app_local_store.dart';
 /// operations that the UI needs.
 class PlaybackController {
   PlaybackController({AudioPlayer? player})
-    : _player = player ?? AudioPlayer() {
+    : _player = player ?? AudioPlayer(handleInterruptions: false) {
     attachStreamListeners();
   }
 
