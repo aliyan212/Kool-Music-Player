@@ -68,7 +68,6 @@ class _MyHomePageState extends State<MyHomePage> {
           player: playbackController.player,
           songs: _appState.songs,
           currentIndex: playbackController.currentIndex,
-          playlist: playbackController.currentPlaylist,
           onQueueChanged: (_) {},
           onOpenNowPlaying: (song) => _appState.openNowPlaying(song),
           selectedTabIndex: _appState.selectedTabIndex,

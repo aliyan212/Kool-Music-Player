@@ -25,7 +25,6 @@ class SmartPlaylistPage extends StatelessWidget {
     required this.icon,
     required this.songs,
     required this.librarySongs,
-    required this.playlist,
     required this.onQueueChanged,
     required this.selectedTabIndex,
     required this.onNavigateTab,
@@ -42,7 +41,6 @@ class SmartPlaylistPage extends StatelessWidget {
   final IconData icon;
   final List<SongModel> songs;
   final List<SongModel> librarySongs;
-  final ConcatenatingAudioSource? playlist;
   final Function(List<SongModel>) onQueueChanged;
   final int selectedTabIndex;
   final ValueChanged<int> onNavigateTab;
@@ -318,7 +316,6 @@ class SmartPlaylistPage extends StatelessWidget {
             player: player,
             songs: librarySongs,
             currentIndex: snapshot.data ?? player.currentIndex,
-            playlist: playlist,
             onQueueChanged: onQueueChanged,
             onOpenNowPlaying: onOpenNowPlaying,
             selectedTabIndex: selectedTabIndex,
@@ -338,7 +335,6 @@ class UserPlaylistPage extends StatefulWidget {
     required this.playlistName,
     required this.initialSongIds,
     required this.librarySongs,
-    required this.playlist,
     required this.onQueueChanged,
     required this.selectedTabIndex,
     required this.onNavigateTab,
@@ -354,7 +350,6 @@ class UserPlaylistPage extends StatefulWidget {
   final String playlistName;
   final List<int> initialSongIds;
   final List<SongModel> librarySongs;
-  final ConcatenatingAudioSource? playlist;
   final Function(List<SongModel>) onQueueChanged;
   final int selectedTabIndex;
   final ValueChanged<int> onNavigateTab;
@@ -1858,7 +1853,6 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
             player: widget.player,
             songs: widget.librarySongs,
             currentIndex: snapshot.data ?? widget.player.currentIndex,
-            playlist: widget.playlist,
             onQueueChanged: widget.onQueueChanged,
             onOpenNowPlaying: widget.onOpenNowPlaying,
             selectedTabIndex: widget.selectedTabIndex,

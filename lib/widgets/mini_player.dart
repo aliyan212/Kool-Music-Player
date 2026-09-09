@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:palette_generator/palette_generator.dart';
 
 import '../android_notifications.dart';
 import '../main.dart';
@@ -18,6 +17,7 @@ import '../pages/now_playing_page.dart';
 import '../pages/queue_page.dart';
 import '../services/playback_controller.dart';
 import '../ui/shared/fast_artwork_widget.dart';
+import '../utils/palette_compute.dart';
 
 
 class MiniPlayer extends StatefulWidget {
@@ -25,7 +25,6 @@ class MiniPlayer extends StatefulWidget {
   final List<SongModel> songs;
   final int? currentIndex;
   final void Function(SongModel) onTap;
-  final ConcatenatingAudioSource? playlist;
   final void Function(List<SongModel>) onQueueChanged;
 
   const MiniPlayer({
@@ -34,7 +33,6 @@ class MiniPlayer extends StatefulWidget {
     required this.songs,
     this.currentIndex,
     required this.onTap,
-    this.playlist,
     required this.onQueueChanged,
   });
 
@@ -92,7 +90,6 @@ class _MiniPlayerState extends State<MiniPlayer> {
           currentIndex: index,
           onTap: () => widget.onTap(song),
           onDismiss: () => widget.controller.stop(),
-          playlist: widget.playlist,
           onQueueChanged: widget.onQueueChanged,
         );
       },
@@ -107,7 +104,6 @@ class MiniPlayerTile extends StatefulWidget {
   final int currentIndex;
   final VoidCallback onTap;
   final VoidCallback onDismiss;
-  final ConcatenatingAudioSource? playlist;
   final void Function(List<SongModel>) onQueueChanged;
 
   const MiniPlayerTile({
@@ -118,7 +114,6 @@ class MiniPlayerTile extends StatefulWidget {
     required this.currentIndex,
     required this.onTap,
     required this.onDismiss,
-    this.playlist,
     required this.onQueueChanged,
   });
 
@@ -252,37 +247,38 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
         return;
       }
 
-      final palette = await PaletteGenerator.fromImageProvider(
-        MemoryImage(bytes),
-        maximumColorCount: 16,
-      );
+      final result = await computePaletteFromBytes(bytes);
 
       if (!mounted) return;
       if (token != _colorToken) return;
       if (songId != widget.song.id) return;
 
-      final baseColor = palette.darkVibrantColor?.color ??
-          palette.vibrantColor?.color ??
-          palette.darkMutedColor?.color ??
-          palette.dominantColor?.color ??
-          Colors.grey;
+      final primaryColorInt = result['primary'] ?? 0xFF222222;
+      final secondaryColorInt = result['secondary'] ?? primaryColorInt;
+      final tertiaryColorInt = result['tertiary'] ?? secondaryColorInt;
+
+      final primary = boostVibrance(
+        Color(primaryColorInt),
+        extraSaturation: 0.5,
+        extraLightness: 0.08,
+      );
+      final secondary = boostVibrance(
+        Color(secondaryColorInt),
+        extraSaturation: 0.42,
+        extraLightness: -0.02,
+      );
+      final tertiary = boostVibrance(
+        Color(tertiaryColorInt),
+        extraSaturation: 0.46,
+        extraLightness: 0.04,
+      );
+      final baseColor = primary;
 
       _bgColorCache.remove(songId);
       _bgColorCache[songId] = baseColor;
       while (_bgColorCache.length > _bgColorCacheMax) {
         _bgColorCache.remove(_bgColorCache.keys.first);
       }
-
-      final primary = palette.darkVibrantColor?.color ??
-          palette.vibrantColor?.color ??
-          palette.dominantColor?.color ??
-          baseColor;
-      final secondary = palette.vibrantColor?.color ??
-          palette.mutedColor?.color ??
-          primary;
-      final tertiary = palette.lightVibrantColor?.color ??
-          palette.darkMutedColor?.color ??
-          secondary;
 
       NowPlayingPage.paletteCache.remove(songId);
       NowPlayingPage.paletteCache[songId] = (
@@ -313,7 +309,6 @@ class _MiniPlayerTileState extends State<MiniPlayerTile> {
           onPlayIndex: (index) {
             widget.controller.seek(Duration.zero, index: index);
           },
-          playlist: widget.playlist,
           onQueueChanged: widget.onQueueChanged,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {

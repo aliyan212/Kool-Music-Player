@@ -64,7 +64,6 @@ class PlaylistsTab extends StatelessWidget {
           icon: icon,
           songs: list,
           librarySongs: songs,
-          playlist: controller.currentPlaylist,
           onQueueChanged: (_) {},
           selectedTabIndex: selectedTabIndex,
           onNavigateTab: appState.selectTab,

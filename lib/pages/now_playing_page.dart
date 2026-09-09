@@ -28,7 +28,6 @@ class NowPlayingPage extends StatefulWidget {
   final AudioPlayer player;
   final SongModel song;
   final List<SongModel> songs;
-  final ConcatenatingAudioSource? playlist;
   final Function(List<SongModel>)? onQueueChanged;
   final void Function(SongModel song) onOpenAlbum;
   final void Function(SongModel song) onOpenArtist;
@@ -47,7 +46,6 @@ class NowPlayingPage extends StatefulWidget {
     required this.player,
     required this.song,
     required this.songs,
-    this.playlist,
     this.onQueueChanged,
     required this.onOpenAlbum,
     required this.onOpenArtist,
@@ -1568,7 +1566,6 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                       Duration.zero,
                                       index: index,
                                     ),
-                                    playlist: widget.playlist,
                                     onQueueChanged:
                                         widget.onQueueChanged ?? (_) {},
                                   ),
@@ -1651,7 +1648,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                     runWithPlaybackSuspended: (action) =>
                                         runWithPlayerPlaybackSuspended(
                                           widget.player,
-                                          widget.playlist,
+                                          widget.player.audioSource,
                                           action,
                                           targetFilePath: _displayedSong.data,
                                         ),
@@ -1673,7 +1670,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                     runWithPlaybackSuspended: (action) =>
                                         runWithPlayerPlaybackSuspended(
                                           widget.player,
-                                          widget.playlist,
+                                          widget.player.audioSource,
                                           action,
                                           targetFilePath: _displayedSong.data,
                                         ),

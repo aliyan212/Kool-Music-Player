@@ -4,11 +4,9 @@ import '../dialogs/playlist_dialogs.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
@@ -68,6 +66,13 @@ class AppStateController extends ChangeNotifier {
   }
   
   BuildContext get context => navigatorKey.currentContext!;
+
+  void showSnackBar(SnackBar snackBar, {BuildContext? context}) {
+    final ctx = context ?? navigatorKey.currentContext;
+    if (ctx != null && ctx.mounted) {
+      ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(snackBar);
+    }
+  }
 
   final PlaybackController _controller = playbackController;
   final AppLocalStore _localStore = AppLocalStore.instance;
@@ -563,8 +568,7 @@ class AppStateController extends ChangeNotifier {
       final f = picked.files.single;
       final bytes = f.bytes;
       if (bytes == null || bytes.isEmpty) {
-        
-        ScaffoldMessenger.of(context).showSnackBar(
+        showSnackBar(
           const SnackBar(
             content: Text('Could not read playlist file'),
             behavior: SnackBarBehavior.floating,
@@ -584,8 +588,7 @@ class AppStateController extends ChangeNotifier {
       }
 
       if (entries.isEmpty) {
-        
-        ScaffoldMessenger.of(context).showSnackBar(
+        showSnackBar(
           const SnackBar(
             content: Text('No tracks found in .m3u'),
             behavior: SnackBarBehavior.floating,
@@ -643,8 +646,7 @@ class AppStateController extends ChangeNotifier {
       }
 
       if (songIds.isEmpty) {
-        
-        ScaffoldMessenger.of(context).showSnackBar(
+        showSnackBar(
           const SnackBar(
             content: Text(
               'Could not match any tracks from the .m3u to your library',
@@ -674,8 +676,7 @@ class AppStateController extends ChangeNotifier {
     notifyListeners();
       await _saveUserPlaylists();
 
-      
-      ScaffoldMessenger.of(context).showSnackBar(
+      showSnackBar(
         SnackBar(
           content: Text(
             'Imported ${songIds.length} track${songIds.length == 1 ? '' : 's'} to "$playlistName"',
@@ -687,8 +688,7 @@ class AppStateController extends ChangeNotifier {
       // Open the imported playlist.
       openUserPlaylistPage(playlist);
     } catch (_) {
-      
-      ScaffoldMessenger.of(context).showSnackBar(
+      showSnackBar(
         const SnackBar(
           content: Text('Failed to import playlist'),
           behavior: SnackBarBehavior.floating,
@@ -706,7 +706,6 @@ class AppStateController extends ChangeNotifier {
         playlistName: playlist.name,
         initialSongIds: playlist.songIds,
         librarySongs: songs,
-        playlist: _controller.currentPlaylist,
         onQueueChanged: (_) {},
         selectedTabIndex: selectedTabIndex,
         onNavigateTab: selectTab,
@@ -828,8 +827,10 @@ class AppStateController extends ChangeNotifier {
 
     if (pickedId == null) return null;
     if (pickedId == '__new__') {
+      final ctx = navigatorKey.currentContext;
+      if (ctx == null || !ctx.mounted) return null;
       return promptCreatePlaylist(
-        context,
+        ctx,
         onPlaylistCreated: createNewPlaylist,
       );
     }
@@ -859,8 +860,7 @@ class AppStateController extends ChangeNotifier {
     }
 
     if (addedCount == 0) {
-      
-      ScaffoldMessenger.of(context).showSnackBar(
+      showSnackBar(
         SnackBar(
           content: Text('All selected songs are already in "${existing.name}"'),
           behavior: SnackBarBehavior.floating,
@@ -877,8 +877,7 @@ class AppStateController extends ChangeNotifier {
     notifyListeners();
     await _saveUserPlaylists();
 
-    
-    ScaffoldMessenger.of(context).showSnackBar(
+    showSnackBar(
       SnackBar(
         content: Text(
           'Added $addedCount song${addedCount == 1 ? '' : 's'} to "${newPlaylist.name}"',
@@ -1010,7 +1009,7 @@ class AppStateController extends ChangeNotifier {
   Future<void> checkNotificationPermission() async {
     final ok = await ensureNotificationPermissionIfNeeded();
     if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      showSnackBar(
         SnackBar(
           content: const Text(
             'Notifications are blocked, so the player notification can\'t be shown.',
@@ -1344,8 +1343,7 @@ class AppStateController extends ChangeNotifier {
     final handler = audioHandler;
     final shouldSuspend =
         handler != null && handler.player == _controller.player;
-    final playlist = _controller.currentPlaylist;
-    final restoreSource = playlist ?? _controller.player.audioSource;
+    final restoreSource = _controller.player.audioSource;
     final hasLoaded =
         _controller.player.processingState != ProcessingState.idle &&
         restoreSource != null;
@@ -1541,7 +1539,7 @@ class AppStateController extends ChangeNotifier {
 
     try {
       _controller.setSuppressIndexUpdates(true);
-      await _controller.player.setAudioSource(
+      await _controller.player.setAudioSources(
         newPlaylist,
         initialIndex: initialIndex,
       );
@@ -1552,7 +1550,7 @@ class AppStateController extends ChangeNotifier {
       debugPrintStack(stackTrace: st);
       if (true) {
         _controller.currentPlayIndex = null;
-        ScaffoldMessenger.of(context).showSnackBar(
+        showSnackBar(
           SnackBar(
             content: Text('Playback failed: ${e.toString()}'),
             behavior: SnackBarBehavior.floating,
@@ -1610,11 +1608,10 @@ class AppStateController extends ChangeNotifier {
           barrierLabel: 'Now Playing',
           transitionDuration: const Duration(milliseconds: 350),
           reverseTransitionDuration: const Duration(milliseconds: 300),
-          pageBuilder: (_, __, ___) => NowPlayingPage(
+          pageBuilder: (_, _, _) => NowPlayingPage(
             player: _controller.player,
             song: song,
             songs: songs,
-            playlist: _controller.currentPlaylist,
             onQueueChanged: (_) {},
             onOpenAlbum: openAlbumPageFromSong,
             onOpenArtist: openArtistPageFromSong,
@@ -1685,7 +1682,6 @@ class AppStateController extends ChangeNotifier {
         albumArtist: albumArtist,
         songs: albumSongs,
         librarySongs: songs,
-        playlist: _controller.currentPlaylist,
         onQueueChanged: (_) {},
         selectedTabIndex: selectedTabIndex,
         onNavigateTab: selectTab,
@@ -1802,7 +1798,6 @@ class AppStateController extends ChangeNotifier {
         artistName: normalizedArtist,
         albums: albums,
         librarySongs: songs,
-        playlist: _controller.currentPlaylist,
         onQueueChanged: (_) {},
         selectedTabIndex: selectedTabIndex,
         onNavigateTab: selectTab,

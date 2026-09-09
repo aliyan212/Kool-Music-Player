@@ -73,8 +73,9 @@ class PlaybackController {
   // ── Library & playlist state ───────────────────────────────────────
   List<SongModel> songs = [];
   Map<int, AlbumModel> albumMap = {};
-  ConcatenatingAudioSource? libraryPlaylist;
-  ConcatenatingAudioSource? currentPlaylist;
+  List<AudioSource>? libraryPlaylist;
+  List<AudioSource>? currentPlaylist;
+  bool _isLibraryActive = false;
   SortMode sortMode = SortMode.albumArtistYear;
   bool isLoading = true;
 
@@ -311,10 +312,8 @@ class PlaybackController {
 
   // ── Playlist building ──────────────────────────────────────────────
 
-  ConcatenatingAudioSource buildPlaylist(List<SongModel> list) {
-    return ConcatenatingAudioSource(
-      children: list.map(sourceForSong).toList(),
-    );
+  List<AudioSource> buildPlaylist(List<SongModel> list) {
+    return list.map(sourceForSong).toList();
   }
 
   // ── Play song ──────────────────────────────────────────────────────
@@ -327,9 +326,12 @@ class PlaybackController {
     try {
       _suppressIndexUpdates = true;
       final activeLibrary = libraryPlaylist;
-      if (_player.audioSource != activeLibrary) {
+      final isFullLibraryLoaded =
+          _isLibraryActive && _player.audioSources.length == songs.length;
+      if (!isFullLibraryLoaded && activeLibrary != null) {
         currentPlaylist = activeLibrary;
-        await _player.setAudioSource(
+        _isLibraryActive = true;
+        await _player.setAudioSources(
           currentPlaylist!,
           initialIndex: index,
         );
@@ -361,13 +363,14 @@ class PlaybackController {
     final songId = queue[initialIndex].id;
     final libraryIndex = songs.indexWhere((s) => s.id == songId);
 
+    _isLibraryActive = false;
     currentPlaylist = newPlaylist;
     currentPlayIndex = libraryIndex >= 0 ? libraryIndex : null;
     currentSongId = songId;
 
     try {
       _suppressIndexUpdates = true;
-      await _player.setAudioSource(
+      await _player.setAudioSources(
         newPlaylist,
         initialIndex: initialIndex,
       );
@@ -388,20 +391,19 @@ class PlaybackController {
   // ── Queue operations ───────────────────────────────────────────────
 
   Future<void> insertInQueue(SongModel song) async {
-    if (currentPlaylist == null || _player.currentIndex == null) return;
+    if (_player.currentIndex == null) return;
     final insertAt = (_player.currentIndex! + 1).clamp(
       0,
-      currentPlaylist!.length,
+      _player.audioSources.length,
     );
     try {
-      await currentPlaylist!.insert(insertAt, sourceForSong(song));
+      await _player.insertAudioSource(insertAt, sourceForSong(song));
     } catch (_) {}
   }
 
   Future<void> addToQueueEnd(SongModel song) async {
-    if (currentPlaylist == null) return;
     try {
-      await currentPlaylist!.add(sourceForSong(song));
+      await _player.addAudioSource(sourceForSong(song));
     } catch (_) {}
   }
 
@@ -503,6 +505,7 @@ class PlaybackController {
     });
 
     currentPlaylist = buildPlaylist(songs);
+    _isLibraryActive = true;
 
     int? newIndex;
     if (currentId != null) {
@@ -511,7 +514,7 @@ class PlaybackController {
     }
 
     if (newIndex != null) {
-      await _player.setAudioSource(
+      await _player.setAudioSources(
         currentPlaylist!,
         initialIndex: newIndex,
       );
@@ -519,7 +522,7 @@ class PlaybackController {
       if (wasPlaying) await _player.play();
       currentPlayIndex = newIndex;
     } else {
-      await _player.setAudioSource(currentPlaylist!);
+      await _player.setAudioSources(currentPlaylist!);
       currentPlayIndex = null;
     }
   }

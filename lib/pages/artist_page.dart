@@ -13,7 +13,6 @@ class ArtistPage extends StatefulWidget {
   final String artistName;
   final List<ArtistAlbum> albums;
   final List<SongModel> librarySongs;
-  final ConcatenatingAudioSource? playlist;
   final Function(List<SongModel>) onQueueChanged;
   final int selectedTabIndex;
   final ValueChanged<int> onNavigateTab;
@@ -29,7 +28,6 @@ class ArtistPage extends StatefulWidget {
     required this.artistName,
     required this.albums,
     required this.librarySongs,
-    required this.playlist,
     required this.onQueueChanged,
     required this.selectedTabIndex,
     required this.onNavigateTab,
@@ -257,7 +255,6 @@ class ArtistPage extends StatefulWidget {
             player: player,
             songs: librarySongs,
             currentIndex: snapshot.data ?? player.currentIndex,
-            playlist: playlist,
             onQueueChanged: onQueueChanged,
             onOpenNowPlaying: onOpenNowPlaying,
             selectedTabIndex: selectedTabIndex,

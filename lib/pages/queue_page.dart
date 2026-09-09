@@ -18,7 +18,6 @@ class QueuePage extends StatefulWidget {
   final List<SongModel> songs;
   final int currentIndex;
   final void Function(int) onPlayIndex;
-  final ConcatenatingAudioSource? playlist;
   final void Function(List<SongModel>) onQueueChanged;
 
   const QueuePage({
@@ -27,7 +26,6 @@ class QueuePage extends StatefulWidget {
     required this.songs,
     required this.currentIndex,
     required this.onPlayIndex,
-    this.playlist,
     required this.onQueueChanged,
   });
 
@@ -143,7 +141,7 @@ class _QueuePageState extends State<QueuePage> {
       final mappedQueue = _queueFromSequence(seq);
       final nextQueue = mappedQueue.isNotEmpty ? mappedQueue : _queue;
       final nextIndex = widget.player.currentIndex ?? _currentIndex;
-      final nextShuffleIndices = state.shuffleIndices ?? [];
+      final nextShuffleIndices = state.shuffleIndices;
 
       final orderChanged = !_sameQueueById(_queue, nextQueue);
       final indexChanged = nextIndex != _currentIndex;
@@ -206,11 +204,9 @@ class _QueuePageState extends State<QueuePage> {
     });
     widget.onQueueChanged(_queue);
 
-    if (widget.playlist == null) return;
-
     _ignoreSequenceUpdates = true;
     try {
-      await widget.playlist!.move(oldIndex, newIndex);
+      await widget.player.moveAudioSource(oldIndex, newIndex);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -242,8 +238,8 @@ class _QueuePageState extends State<QueuePage> {
 
     _ignoreSequenceUpdates = true;
     try {
-      if (widget.playlist != null) {
-        await widget.playlist!.removeAt(resolvedIndex);
+      if (resolvedIndex < widget.player.audioSources.length) {
+        await widget.player.removeAudioSourceAt(resolvedIndex);
       }
 
       if (!mounted) return;

@@ -1,7 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 import '../services/playback_controller.dart';
@@ -43,25 +41,13 @@ Future<void> showSongOptionsSheet({
     );
   }
 
-  AudioSource sourceForSong(SongModel s) {
-    final useBackground =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-    final uri = playbackController.songUri(s);
-    final tag = useBackground ? playbackController.toMediaItem(s) : s;
-    return AudioSource.uri(uri, tag: tag);
-  }
-
   Future<void> playNext() async {
-    if (playbackController.currentPlaylist == null || playbackController.player.currentIndex == null) {
+    if (playbackController.player.currentIndex == null || playbackController.player.audioSources.isEmpty) {
       await onPlaySong();
       return;
     }
-    final insertAt = (playbackController.player.currentIndex! + 1).clamp(
-      0,
-      playbackController.currentPlaylist!.length,
-    );
     try {
-      await playbackController.currentPlaylist!.insert(insertAt, sourceForSong(song));
+      await playbackController.insertInQueue(song);
       HapticFeedback.selectionClick();
     } catch (_) {
       await onPlaySong();
@@ -69,12 +55,12 @@ Future<void> showSongOptionsSheet({
   }
 
   Future<void> addToQueue() async {
-    if (playbackController.currentPlaylist == null) {
+    if (playbackController.player.audioSources.isEmpty) {
       await onPlaySong();
       return;
     }
     try {
-      await playbackController.currentPlaylist!.add(sourceForSong(song));
+      await playbackController.addToQueueEnd(song);
       HapticFeedback.selectionClick();
     } catch (_) {
       await onPlaySong();
