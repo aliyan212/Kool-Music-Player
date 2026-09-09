@@ -142,4 +142,50 @@ void main() {
     expect(appState.inlineDetailContent, isNull);
     expect(appState.selectedTabIndex, 3);
   });
+
+  testWidgets('PageController with keepPage false mounts at correct target page without stale offset', (tester) async {
+    int activePage = 1;
+    PageController controller = PageController(initialPage: activePage, keepPage: false);
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: PageView.builder(
+          controller: controller,
+          itemCount: 5,
+          itemBuilder: (context, index) => Text('Page $index'),
+        ),
+      ),
+    );
+
+    expect(find.text('Page 1'), findsOneWidget);
+    expect(controller.page?.round(), 1);
+
+    // Unmount PageView and update controller to page 3 (simulating switching views)
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: SizedBox(),
+      ),
+    );
+
+    controller.dispose();
+    activePage = 3;
+    controller = PageController(initialPage: activePage, keepPage: false);
+
+    // Mount in a different view (simulating fullscreen view)
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: PageView.builder(
+          controller: controller,
+          itemCount: 5,
+          itemBuilder: (context, index) => Text('Page $index'),
+        ),
+      ),
+    );
+
+    expect(find.text('Page 3'), findsOneWidget);
+    expect(controller.page?.round(), 3);
+  });
 }

@@ -96,7 +96,8 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   late final AnimationController _bgGradientController;
   late final AnimationController _artworkPulseController;
-  late PageController _pageController;
+  late PageController _portraitPageController;
+  late PageController _fullscreenPageController;
   StreamSubscription<PlayerState>? _nowPlayingPlayerStateSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<bool>? _shuffleSub;
@@ -124,9 +125,13 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     return pos >= 0 ? pos : seqIndex.clamp(0, effectiveIndices.length - 1);
   }
 
-  void _syncPageController(int targetPage) {
-    if (_pageController.hasClients) {
-      final page = _pageController.page;
+  void _syncSpecificController(
+    PageController controller,
+    void Function(PageController) onRecreated,
+    int targetPage,
+  ) {
+    if (controller.hasClients) {
+      final page = controller.page;
       if (page != null && (page - targetPage).abs() < 0.05) {
         return;
       }
@@ -135,7 +140,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
         _isProgrammaticPageChange = true;
         final isAdjacent = (currentPage - targetPage).abs() == 1;
         if (isAdjacent) {
-          _pageController
+          controller
               .animateToPage(
                 targetPage,
                 duration: const Duration(milliseconds: 300),
@@ -145,14 +150,27 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                 _isProgrammaticPageChange = false;
               });
         } else {
-          _pageController.jumpToPage(targetPage);
+          controller.jumpToPage(targetPage);
           _isProgrammaticPageChange = false;
         }
       }
     } else {
-      _pageController.dispose();
-      _pageController = PageController(initialPage: targetPage);
+      controller.dispose();
+      onRecreated(PageController(initialPage: targetPage, keepPage: false));
     }
+  }
+
+  void _syncPageController(int targetPage) {
+    _syncSpecificController(
+      _portraitPageController,
+      (c) => _portraitPageController = c,
+      targetPage,
+    );
+    _syncSpecificController(
+      _fullscreenPageController,
+      (c) => _fullscreenPageController = c,
+      targetPage,
+    );
   }
 
   @override
@@ -171,8 +189,13 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       widget.player.currentIndex ?? 0,
       initialEffective,
     );
-    _pageController = PageController(
+    _portraitPageController = PageController(
       initialPage: initialPage,
+      keepPage: false,
+    );
+    _fullscreenPageController = PageController(
+      initialPage: initialPage,
+      keepPage: false,
     );
     if (hasCachedArtworkBytes(_displayedSong.id, size: 900)) {
       _displayedArtworkBytes = peekCachedArtworkBytes(
@@ -267,9 +290,24 @@ class _NowPlayingPageState extends State<NowPlayingPage>
       final effective = _getEffectiveIndices();
       final targetPage = _pageForSequenceIndex(index, effective);
       if (_userSwipedToPage == targetPage) {
-        // Handled smoothly by PageView's ongoing drag/ballistic scroll;
-        // avoid launching a competing programmatic animation.
+        // Handled smoothly by active PageView's ongoing drag/ballistic scroll;
+        // avoid launching a competing programmatic animation on it,
+        // but ensure any inactive controller is updated.
         _userSwipedToPage = null;
+        if (!_portraitPageController.hasClients) {
+          _portraitPageController.dispose();
+          _portraitPageController = PageController(
+            initialPage: targetPage,
+            keepPage: false,
+          );
+        }
+        if (!_fullscreenPageController.hasClients) {
+          _fullscreenPageController.dispose();
+          _fullscreenPageController = PageController(
+            initialPage: targetPage,
+            keepPage: false,
+          );
+        }
       } else {
         _userSwipedToPage = null;
         _syncPageController(targetPage);
@@ -411,7 +449,8 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     }
 
     _activeLyricIndex.dispose();
-    _pageController.dispose();
+    _portraitPageController.dispose();
+    _fullscreenPageController.dispose();
 
     appIsForeground.removeListener(_handleForegroundChanged);
     _bgGradientController.dispose();
@@ -538,6 +577,28 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   Future<void> _setFullscreenLandscape(bool enabled) async {
     if (_fullscreenLandscape == enabled) return;
+    final effective = _getEffectiveIndices();
+    final currentSeqIndex = widget.player.currentIndex ?? 0;
+    final targetPage = _pageForSequenceIndex(currentSeqIndex, effective);
+
+    if (enabled) {
+      if (!_fullscreenPageController.hasClients) {
+        _fullscreenPageController.dispose();
+        _fullscreenPageController = PageController(
+          initialPage: targetPage,
+          keepPage: false,
+        );
+      }
+    } else {
+      if (!_portraitPageController.hasClients) {
+        _portraitPageController.dispose();
+        _portraitPageController = PageController(
+          initialPage: targetPage,
+          keepPage: false,
+        );
+      }
+    }
+
     setState(() {
       _fullscreenLandscape = enabled;
       if (enabled) {
@@ -591,6 +652,18 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   void _setLyricsVisible(bool show, {bool force = false}) {
     if (!force && _showLyrics == show) return;
+    if (!show) {
+      final effective = _getEffectiveIndices();
+      final currentSeqIndex = widget.player.currentIndex ?? 0;
+      final targetPage = _pageForSequenceIndex(currentSeqIndex, effective);
+      if (!_portraitPageController.hasClients) {
+        _portraitPageController.dispose();
+        _portraitPageController = PageController(
+          initialPage: targetPage,
+          keepPage: false,
+        );
+      }
+    }
     setState(() {
       _showLyrics = show;
       if (show) {
@@ -940,7 +1013,10 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                                     ),
                                   ],
                                 ),
-                                child: _buildArtworkPageView(side: side),
+                                child: _buildArtworkPageView(
+                                  side: side,
+                                  isFullscreen: true,
+                                ),
                               ),
                             ),
                           );
@@ -2050,7 +2126,10 @@ class _NowPlayingPageState extends State<NowPlayingPage>
     );
   }
 
-  Widget _buildArtworkPageView({required double side}) {
+  Widget _buildArtworkPageView({
+    required double side,
+    required bool isFullscreen,
+  }) {
     final sequence = widget.player.sequence;
     if (sequence.isEmpty) {
       return _buildNowPlayingArtwork(side: side);
@@ -2058,9 +2137,27 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
     final effective = _getEffectiveIndices();
     final itemCount = effective.length;
+    final currentSeqIndex = widget.player.currentIndex ?? 0;
+    final targetPage = _pageForSequenceIndex(currentSeqIndex, effective);
+
+    PageController controller =
+        isFullscreen ? _fullscreenPageController : _portraitPageController;
+
+    if (!controller.hasClients && controller.initialPage != targetPage) {
+      controller.dispose();
+      controller = PageController(
+        initialPage: targetPage,
+        keepPage: false,
+      );
+      if (isFullscreen) {
+        _fullscreenPageController = controller;
+      } else {
+        _portraitPageController = controller;
+      }
+    }
 
     return PageView.builder(
-      controller: _pageController,
+      controller: controller,
       physics: _SnappyArtworkScrollPhysics(itemCount: itemCount),
       itemCount: itemCount,
       onPageChanged: (page) {
@@ -2117,7 +2214,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
           ),
         );
 
-        if (songId == _displayedSong.id) {
+        if (!isFullscreen && songId == _displayedSong.id) {
           return Hero(
             tag: 'mini_artwork_$songId',
             child: ClipRRect(
@@ -2174,7 +2271,10 @@ class _NowPlayingPageState extends State<NowPlayingPage>
                     ),
                   ],
                 ),
-                child: _buildArtworkPageView(side: side),
+                child: _buildArtworkPageView(
+                  side: side,
+                  isFullscreen: false,
+                ),
               ),
             ),
           ),
