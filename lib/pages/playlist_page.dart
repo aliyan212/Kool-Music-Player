@@ -14,6 +14,7 @@ import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/format_utils.dart';
 import '../utils/song_sort_utils.dart';
 import '../ui/shared/bottom_bars_gutter.dart';
+import '../widgets/universal_song_tile.dart';
 
 enum PlaylistSort { manual, artist, albumArtist, year, albumArtistYear }
 class SmartPlaylistPage extends StatelessWidget {
@@ -1716,96 +1717,41 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                         );
                       }
 
-                      final tile = Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                        child: Material(
-                          color: isSelected
-                              ? cs.secondaryContainer.withValues(alpha: isDark ? 0.35 : 0.6)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(14),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () {
-                              if (_selectionMode) {
-                                _toggleSelection(song.id);
-                                return;
-                              }
-                              HapticFeedback.selectionClick();
-                              widget.playFromQueue(songs, index);
-                            },
-                            onLongPress: () {
-                              if (_selectionMode) {
-                                _toggleSelection(song.id);
-                                return;
-                              }
-                              HapticFeedback.selectionClick();
-                              _enterSelectionMode(song.id);
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 8,
-                              ),
-                              child: Row(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: FastArtworkWidget(
-                                      id: song.id,
-                                      type: ArtworkType.AUDIO,
-                                      width: 48,
-                                      height: 48,
-                                      artworkFit: BoxFit.cover,
-                                      nullArtworkWidget: Container(
-                                        width: 48,
-                                        height: 48,
-                                        decoration: BoxDecoration(
-                                          color: cs.surfaceContainerHighest,
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        child: Icon(
-                                          Icons.music_note_rounded,
-                                          color: cs.onSurfaceVariant,
-                                          size: 24,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          song.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          artistText,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: cs.onSurfaceVariant,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  trailing,
-                                ],
-                              ),
-                            ),
-                          ),
+                      final tile = UniversalSongTile(
+                        song: song,
+                        subtitle: artistText,
+                        isSelected: isSelected,
+                        isSelectionMode: _selectionMode,
+                        artworkSize: 48,
+                        artworkBorderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14),
+                        backgroundColor: isSelected
+                            ? cs.secondaryContainer.withValues(
+                                alpha: isDark ? 0.35 : 0.6,
+                              )
+                            : Colors.transparent,
+                        borderColor: Colors.transparent,
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 2,
                         ),
+                        trailing: trailing,
+                        onTap: () {
+                          if (_selectionMode) {
+                            _toggleSelection(song.id);
+                            return;
+                          }
+                          HapticFeedback.selectionClick();
+                          widget.playFromQueue(songs, index);
+                        },
+                        onLongPress: () {
+                          if (_selectionMode) {
+                            _toggleSelection(song.id);
+                            return;
+                          }
+                          HapticFeedback.selectionClick();
+                          _enterSelectionMode(song.id);
+                        },
                       );
 
                       return Dismissible(

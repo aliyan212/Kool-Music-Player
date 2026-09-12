@@ -8,6 +8,7 @@ import '../utils/palette_compute.dart';
 import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/format_utils.dart';
 import '../ui/shared/bottom_bars_gutter.dart';
+import '../widgets/universal_song_tile.dart';
 
 class AlbumPage extends StatefulWidget {
   final AudioPlayer player;
@@ -355,11 +356,8 @@ class AlbumPage extends StatefulWidget {
                       final s = songs[i];
                       final trackNo = _normalizedTrackNo(s.track ?? 0);
                       final dur = s.duration ?? 0;
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 2,
-                        ),
+                      return UniversalSongTile(
+                        song: s,
                         leading: SizedBox(
                           width: 34,
                           child: Text(
@@ -372,21 +370,18 @@ class AlbumPage extends StatefulWidget {
                                 ),
                           ),
                         ),
-                        title: Text(
-                          s.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          s.artist ?? 'Unknown',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
                         trailing: Text(
                           formatTime(dur),
                           style: Theme.of(context).textTheme.labelMedium
                               ?.copyWith(color: cs.onSurfaceVariant),
                         ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        backgroundColor: Colors.transparent,
+                        borderColor: Colors.transparent,
+                        borderRadius: BorderRadius.zero,
                         onTap: () {
                           HapticFeedback.selectionClick();
                           onPlaySong(s);

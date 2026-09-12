@@ -9,6 +9,7 @@ import '../../services/playback_controller.dart';
 import '../../ui/shared/fast_artwork_widget.dart';
 import '../../utils/format_utils.dart';
 import '../../ui/shared/bottom_bars_gutter.dart';
+import '../../widgets/universal_song_tile.dart';
 
 enum AppMenuAction { refresh, manageFolders, toggleTheme, about, quit }
 
@@ -689,7 +690,6 @@ class LibraryTab extends StatelessWidget {
               delegate: SliverChildBuilderDelegate((context, index) {
                 final song = songs[index];
                 final isSelected = selectedSongIds.contains(song.id);
-                final cs = Theme.of(context).colorScheme;
 
                 // 1. Push the listeners DOWN to the individual item level
                 return ValueListenableBuilder<int?>(
@@ -718,54 +718,6 @@ class LibraryTab extends StatelessWidget {
                                 ? Icons.pause_rounded
                                 : Icons.play_arrow_rounded;
 
-                            final tileColor = (isSelectionMode && isSelected)
-                                ? Color.alphaBlend(
-                                    cs.primaryContainer.withValues(
-                                      alpha:
-                                          Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? 0.28
-                                          : 0.55,
-                                    ),
-                                    cs.surface,
-                                  )
-                                : isCurrent
-                                ? Color.alphaBlend(
-                                    cs.secondaryContainer.withValues(
-                                      alpha:
-                                          Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? 0.35
-                                          : 0.55,
-                                    ),
-                                    cs.surface,
-                                  )
-                                : cs.surfaceContainerLow;
-
-                            final borderColor = (isSelectionMode && isSelected)
-                                ? cs.primary.withValues(
-                                    alpha:
-                                        Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? 0.35
-                                        : 0.30,
-                                  )
-                                : isCurrent
-                                ? cs.secondary.withValues(
-                                    alpha:
-                                        Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? 0.30
-                                        : 0.22,
-                                  )
-                                : cs.outlineVariant.withValues(
-                                    alpha:
-                                        Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? 0.28
-                                        : 0.35,
-                                  );
-
                             final artistText =
                                 (song.artist ?? '').trim().isEmpty
                                 ? 'Unknown Artist'
@@ -773,381 +725,90 @@ class LibraryTab extends StatelessWidget {
                             final albumText = (song.album ?? '').trim().isEmpty
                                 ? 'Unknown Album'
                                 : song.album!.trim();
-                            final durationText = song.duration == null
-                                ? null
-                                : formatTime(song.duration);
-                            final metaText = albumText;
 
-                            final baseShadows =
-                                Theme.of(context).brightness == Brightness.dark
-                                ? const <BoxShadow>[]
-                                : [
-                                    BoxShadow(
-                                      blurRadius: 10,
-                                      spreadRadius: -6,
-                                      offset: const Offset(0, 6),
-                                      color: Colors.black.withValues(
-                                        alpha: isCurrent ? 0.12 : 0.08,
+                            final trailing = isSelectionMode
+                                ? IconButton.filledTonal(
+                                    icon: Icon(
+                                      isSelected
+                                          ? Icons.check_circle_rounded
+                                          : Icons.radio_button_unchecked_rounded,
+                                    ),
+                                    tooltip: isSelected ? 'Deselect' : 'Select',
+                                    onPressed: () {
+                                      HapticFeedback.selectionClick();
+                                      appState.toggleSelectedSongId(song.id);
+                                    },
+                                  )
+                                : IconButton.filledTonal(
+                                    icon: AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 220,
+                                      ),
+                                      transitionBuilder: (child, animation) {
+                                        return ScaleTransition(
+                                          scale: CurvedAnimation(
+                                            parent: animation,
+                                            curve: Curves.easeOutBack,
+                                          ),
+                                          child: FadeTransition(
+                                            opacity: animation,
+                                            child: child,
+                                          ),
+                                        );
+                                      },
+                                      child: Icon(
+                                        icon,
+                                        key: ValueKey(icon),
                                       ),
                                     ),
-                                  ];
-                            final highlightShadows = isCurrent
-                                ? [
-                                    BoxShadow(
-                                      blurRadius: 18,
-                                      spreadRadius: -8,
-                                      offset: const Offset(0, 10),
-                                      color: cs.primary.withValues(
-                                        alpha:
-                                            Theme.of(context).brightness ==
-                                                Brightness.dark
-                                            ? 0.28
-                                            : 0.18,
-                                      ),
-                                    ),
-                                  ]
-                                : const <BoxShadow>[];
+                                    tooltip: showPause ? 'Pause' : 'Play',
+                                    onPressed: () async {
+                                      HapticFeedback.selectionClick();
+                                      if (isCurrent) {
+                                        if (playing) {
+                                          await controller.player.pause();
+                                        } else {
+                                          await appState
+                                              .checkNotificationPermission();
+                                          await controller.player.play();
+                                        }
+                                        return;
+                                      }
+                                      controller.playSong(index);
+                                    },
+                                  );
 
-                            return RepaintBoundary(
-                              key: ValueKey(song.id),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 220),
-                                  curve: Curves.easeOutCubic,
-                                  decoration: ShapeDecoration(
-                                    color: tileColor,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                      side: BorderSide(
-                                        color: borderColor,
-                                        width: 1,
-                                      ),
-                                    ),
-                                    shadows: <BoxShadow>[
-                                      ...baseShadows,
-                                      ...highlightShadows,
-                                    ],
-                                  ),
-                                  child: Material(
-                                    type: MaterialType.transparency,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(20),
-                                      onTap: () {
-                                        HapticFeedback.selectionClick();
-                                        if (isSelectionMode) {
-                                          appState.toggleSelectedSongId(song.id);
-                                        } else {
-                                          controller.playSong(index);
-                                        }
-                                      },
-                                      onLongPress: () {
-                                        HapticFeedback.mediumImpact();
-                                        if (isSelectionMode) {
-                                          appState.toggleSelectedSongId(song.id);
-                                        } else {
-                                          appState.showSongOptions(song, index);
-                                        }
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 14,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Stack(
-                                              children: [
-                                                AnimatedScale(
-                                                  scale: isCurrent ? 1.03 : 1.0,
-                                                  duration: const Duration(
-                                                    milliseconds: 220,
-                                                  ),
-                                                  curve: Curves.easeOutCubic,
-                                                  child: ClipOval(
-                                                    child: FastArtworkWidget(
-                                                      id: song.id,
-                                                      type: ArtworkType.AUDIO,
-                                                      width: 56,
-                                                      height: 56,
-                                                      nullArtworkWidget: Container(
-                                                        width: 56,
-                                                        height: 56,
-                                                        decoration: BoxDecoration(
-                                                          color: cs
-                                                              .surfaceContainerHighest,
-                                                          shape:
-                                                              BoxShape.circle,
-                                                        ),
-                                                        child: Icon(
-                                                          Icons
-                                                              .music_note_rounded,
-                                                          color: cs
-                                                              .onSurfaceVariant,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                                if (isSelectionMode)
-                                                  Positioned(
-                                                    left: 4,
-                                                    top: 4,
-                                                    child: Container(
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            4,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: Color.alphaBlend(
-                                                          cs.surface.withValues(
-                                                            alpha: 0.75,
-                                                          ),
-                                                          cs.surfaceContainerHigh,
-                                                        ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              999,
-                                                            ),
-                                                        border: Border.all(
-                                                          color: cs
-                                                              .outlineVariant
-                                                              .withValues(
-                                                                alpha: 0.35,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                      child: Icon(
-                                                        isSelected
-                                                            ? Icons
-                                                                  .check_circle_rounded
-                                                            : Icons
-                                                                  .radio_button_unchecked_rounded,
-                                                        size: 14,
-                                                        color: isSelected
-                                                            ? cs.primary
-                                                            : cs.onSurfaceVariant,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                if (isCurrent)
-                                                  Positioned(
-                                                    right: 4,
-                                                    bottom: 4,
-                                                    child: Container(
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            4,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: Color.alphaBlend(
-                                                          cs.surface.withValues(
-                                                            alpha: 0.75,
-                                                          ),
-                                                          cs.surfaceContainerHigh,
-                                                        ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              999,
-                                                            ),
-                                                        border: Border.all(
-                                                          color: cs
-                                                              .outlineVariant
-                                                              .withValues(
-                                                                alpha: 0.35,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                      child: Icon(
-                                                        playing
-                                                            ? Icons
-                                                                  .graphic_eq_rounded
-                                                            : Icons
-                                                                  .pause_circle_filled_rounded,
-                                                        size: 14,
-                                                        color: cs.onSurface
-                                                            .withValues(
-                                                              alpha: 0.85,
-                                                            ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    song.title,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .titleMedium
-                                                        ?.copyWith(
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                          letterSpacing: -0.05,
-                                                        ),
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    artistText,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .bodyMedium
-                                                        ?.copyWith(
-                                                          color: cs
-                                                              .onSurfaceVariant,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                        ),
-                                                  ),
-                                                  Row(
-                                                    children: [
-                                                      Expanded(
-                                                        child: Text(
-                                                          metaText,
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                          style: Theme.of(context)
-                                                              .textTheme
-                                                              .bodySmall
-                                                              ?.copyWith(
-                                                                color: cs
-                                                                    .onSurfaceVariant
-                                                                    .withValues(
-                                                                      alpha:
-                                                                          0.75,
-                                                                    ),
-                                                              ),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      SizedBox(
-                                                        width: 48,
-                                                        child: Text(
-                                                          durationText ??
-                                                              '--:--',
-                                                          maxLines: 1,
-                                                          textAlign:
-                                                              TextAlign.right,
-                                                          overflow: TextOverflow
-                                                              .visible,
-                                                          style: Theme.of(context)
-                                                              .textTheme
-                                                              .labelMedium
-                                                              ?.copyWith(
-                                                                color: cs
-                                                                    .onSurfaceVariant
-                                                                    .withValues(
-                                                                      alpha:
-                                                                          durationText ==
-                                                                              null
-                                                                          ? 0.45
-                                                                          : 0.8,
-                                                                    ),
-                                                                fontFeatures:
-                                                                    const [
-                                                                      FontFeature.tabularFigures(),
-                                                                    ],
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            isSelectionMode
-                                                ? IconButton.filledTonal(
-                                                    icon: Icon(
-                                                      isSelected
-                                                          ? Icons
-                                                                .check_circle_rounded
-                                                          : Icons
-                                                                .radio_button_unchecked_rounded,
-                                                    ),
-                                                    tooltip: isSelected
-                                                        ? 'Deselect'
-                                                        : 'Select',
-                                                    onPressed: () {
-                                                      HapticFeedback.selectionClick();
-                                                      appState.toggleSelectedSongId(
-                                                        song.id,
-                                                      );
-                                                    },
-                                                  )
-                                                : IconButton.filledTonal(
-                                                    icon: AnimatedSwitcher(
-                                                      duration: const Duration(
-                                                        milliseconds: 220,
-                                                      ),
-                                                      transitionBuilder:
-                                                          (child, animation) {
-                                                            return ScaleTransition(
-                                                              scale: CurvedAnimation(
-                                                                parent:
-                                                                    animation,
-                                                                curve: Curves
-                                                                    .easeOutBack,
-                                                              ),
-                                                              child:
-                                                                  FadeTransition(
-                                                                    opacity:
-                                                                        animation,
-                                                                    child:
-                                                                        child,
-                                                                  ),
-                                                            );
-                                                          },
-                                                      child: Icon(
-                                                        icon,
-                                                        key: ValueKey(icon),
-                                                      ),
-                                                    ),
-                                                    tooltip: showPause
-                                                        ? 'Pause'
-                                                        : 'Play',
-                                                    onPressed: () async {
-                                                      HapticFeedback.selectionClick();
-                                                      if (isCurrent) {
-                                                        if (playing) {
-                                                          await controller
-                                                              .player
-                                                              .pause();
-                                                        } else {
-                                                          await appState.checkNotificationPermission();
-                                                          await controller
-                                                              .player
-                                                              .play();
-                                                        }
-                                                        return;
-                                                      }
-                                                      controller.playSong(
-                                                        index,
-                                                      );
-                                                    },
-                                                  ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                            return UniversalSongTile(
+                              song: song,
+                              title: song.title,
+                              subtitle: artistText,
+                              meta: albumText,
+                              durationMs: song.duration,
+                              isCurrent: isCurrent,
+                              isPlaying: playing,
+                              isSelected: isSelected,
+                              isSelectionMode: isSelectionMode,
+                              circularArtwork: true,
+                              artworkSize: 56,
+                              showArtworkBadges: true,
+                              showShadows: true,
+                              trailing: trailing,
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                if (isSelectionMode) {
+                                  appState.toggleSelectedSongId(song.id);
+                                } else {
+                                  controller.playSong(index);
+                                }
+                              },
+                              onLongPress: () {
+                                HapticFeedback.mediumImpact();
+                                if (isSelectionMode) {
+                                  appState.toggleSelectedSongId(song.id);
+                                } else {
+                                  appState.showSongOptions(song, index);
+                                }
+                              },
                             );
                           },
                         );

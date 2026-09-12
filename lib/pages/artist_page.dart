@@ -7,6 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/format_utils.dart';
 import '../ui/shared/bottom_bars_gutter.dart';
+import '../widgets/universal_song_tile.dart';
 
 class ArtistPage extends StatelessWidget {
   final AudioPlayer player;
@@ -192,43 +193,22 @@ class ArtistPage extends StatelessWidget {
               final yearText = a.year > 0 ? a.year.toString() : '–';
               final meta =
                   '$yearText • ${a.trackCount} tracks • ${formatTime(a.totalDurationMs)}';
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 2,
-                ),
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: FastArtworkWidget(
-                    id: a.albumId,
-                    type: ArtworkType.ALBUM,
-                    width: 52,
-                    height: 52,
-                    nullArtworkWidget: Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        Icons.album_rounded,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
-                title: Text(
-                  a.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  meta,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              return UniversalSongTile(
+                artworkId: a.albumId,
+                artworkType: ArtworkType.ALBUM,
+                artworkSize: 52,
+                artworkBorderRadius: BorderRadius.circular(10),
+                fallbackIcon: Icons.album_rounded,
+                title: a.title,
+                subtitle: meta,
                 trailing: const Icon(Icons.chevron_right_rounded),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                backgroundColor: Colors.transparent,
+                borderColor: Colors.transparent,
+                borderRadius: BorderRadius.zero,
                 onTap: () {
                   HapticFeedback.selectionClick();
                   onOpenAlbum(a.representativeSong);
