@@ -8,6 +8,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import '../../services/playback_controller.dart';
 import '../../ui/shared/fast_artwork_widget.dart';
 import '../../utils/format_utils.dart';
+import '../../dialogs/batch_tag_editor_dialog.dart';
 import '../../ui/shared/bottom_bars_gutter.dart';
 import '../../widgets/universal_song_tile.dart';
 
@@ -74,6 +75,38 @@ class LibraryTab extends StatelessWidget {
               ),
               actions: [
                 if (isSelectionMode) ...[
+                  IconButton(
+                    tooltip: 'Edit tags',
+                    onPressed: selectedSongIds.isEmpty
+                        ? null
+                        : () async {
+                            HapticFeedback.selectionClick();
+                            final selectedSongs = appState.songs
+                                .where((s) => selectedSongIds.contains(s.id))
+                                .toList(growable: false);
+                            if (selectedSongs.isEmpty) return;
+                            await showDialog<void>(
+                              context: context,
+                              builder: (ctx) => BatchTagEditorDialog(
+                                songs: selectedSongs,
+                                onSaved: () {},
+                                onSongsUpdated: (updatedSongs) {
+                                  appState.updateSongsMetadataInPlace(updatedSongs);
+                                },
+                                runWithPlaybackSuspended: (action) =>
+                                    appState.runWithPlaybackSuspendedForBatchTagWrite(
+                                      action,
+                                      targetFilePaths: selectedSongs
+                                          .map((s) => s.data)
+                                          .toSet(),
+                                      itemCount: selectedSongs.length,
+                                    ),
+                              ),
+                            );
+                            appState.exitSelectionMode();
+                          },
+                    icon: const Icon(Icons.tune_rounded),
+                  ),
                   IconButton(
                     tooltip: 'Cancel',
                     onPressed: () {
@@ -583,7 +616,7 @@ class LibraryTab extends StatelessWidget {
                         value: SortMode.albumArtistYear,
                         child: menuLabel(
                           Icons.calendar_view_month_rounded,
-                          'Sort by Album Artist/Year',
+                          'Sort by Album Artist / Year',
                         ),
                       ),
                     ],

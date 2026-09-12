@@ -124,7 +124,12 @@ class UniversalSongTile extends StatelessWidget {
     this.borderColor,
     this.borderRadius,
     this.showShadows = false,
+    this.showMetaDuration = true,
   });
+
+  /// Whether to show the duration in the meta line under the title/artist.
+  /// Set to false when duration is shown in trailing or not needed.
+  final bool showMetaDuration;
 
   @override
   Widget build(BuildContext context) {
@@ -325,7 +330,9 @@ class UniversalSongTile extends StatelessWidget {
       fontWeight: FontWeight.w500,
     );
 
-    final durationText = resolvedDuration == null ? null : formatTime(resolvedDuration);
+    final durationText = (showMetaDuration && resolvedDuration != null)
+        ? formatTime(resolvedDuration)
+        : null;
 
     final hasMetaLine = (resolvedMeta != null && resolvedMeta.isNotEmpty) || durationText != null;
 

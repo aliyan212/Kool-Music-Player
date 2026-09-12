@@ -153,3 +153,4 @@ class SyncedLyricsView extends StatelessWidget {
     );
   }
 }
+

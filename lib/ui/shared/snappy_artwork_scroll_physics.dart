@@ -58,3 +58,4 @@ class SnappyArtworkScrollPhysics extends ScrollPhysics {
     return null;
   }
 }
+

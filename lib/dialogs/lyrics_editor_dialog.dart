@@ -86,10 +86,13 @@ class _LyricsEditorDialogState extends State<LyricsEditorDialog> {
       }
 
       if (!mounted) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      Navigator.pop(context, true);
+
       widget.onLyricsSaved?.call(expectedLyrics);
       widget.onSaved();
-      Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(
+
+      messenger?.showSnackBar(
         const SnackBar(
           content: Text('Lyrics saved successfully'),
           backgroundColor: Colors.green,

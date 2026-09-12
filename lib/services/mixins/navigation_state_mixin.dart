@@ -19,6 +19,7 @@ mixin NavigationStateMixin on ChangeNotifier {
   // Dependencies satisfied by AppStateController or companion mixins:
   List<SongModel> get songs;
   void updateSongMetadataInPlace(SongModel updatedSong);
+  void updateSongsMetadataInPlace(List<SongModel> updatedSongs);
 
   final SearchController searchController = SearchController();
 
@@ -340,6 +341,7 @@ mixin NavigationStateMixin on ChangeNotifier {
         player: playbackController.player,
         artistName: normalizedArtist,
         albums: albums,
+        artistSongs: artistSongs,
         librarySongs: songs,
         onQueueChanged: (_) {},
         selectedTabIndex: selectedTabIndex,
@@ -366,6 +368,13 @@ mixin NavigationStateMixin on ChangeNotifier {
                   queue.addAll(sorted);
                 }
                 if (queue.isEmpty) return;
+                await playbackController.playFromQueue(queue, initialIndex: 0);
+              },
+        onShuffleAll: artistSongs.isEmpty
+            ? null
+            : () async {
+                final queue = List<SongModel>.from(artistSongs);
+                queue.shuffle();
                 await playbackController.playFromQueue(queue, initialIndex: 0);
               },
       ),

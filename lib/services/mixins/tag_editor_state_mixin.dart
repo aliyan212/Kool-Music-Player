@@ -41,35 +41,88 @@ mixin TagEditorStateMixin on ChangeNotifier {
   }
 
   void updateSongMetadataInPlace(SongModel updatedSong) {
+    updateSongsMetadataInPlace([updatedSong]);
+  }
+
+  void updateSongsMetadataInPlace(List<SongModel> updatedSongs) {
+    if (updatedSongs.isEmpty) return;
+
+    final updatedById = <int, SongModel>{
+      for (final s in updatedSongs) s.id: s,
+    };
+    final updatedByPath = <String, SongModel>{
+      for (final s in updatedSongs) s.data: s,
+    };
+
+    SongModel? findUpdated(SongModel s) =>
+        updatedById[s.id] ?? updatedByPath[s.data];
+
     // 1. Update in songs list
-    final idx = songs.indexWhere(
-      (s) => s.id == updatedSong.id || s.data == updatedSong.data,
-    );
-    if (idx != -1) {
-      final newSongs = List<SongModel>.from(songs);
-      newSongs[idx] = updatedSong;
+    final newSongs = List<SongModel>.from(songs);
+    bool changedSongs = false;
+    for (int i = 0; i < newSongs.length; i++) {
+      final u = findUpdated(newSongs[i]);
+      if (u != null) {
+        newSongs[i] = u;
+        changedSongs = true;
+      }
+    }
+    if (changedSongs) {
       songs = newSongs;
     }
 
     // 2. Update in playbackController.songs
-    final ctrlIdx = playbackController.songs.indexWhere(
-      (s) => s.id == updatedSong.id || s.data == updatedSong.data,
-    );
-    if (ctrlIdx != -1) {
-      final newCtrlSongs = List<SongModel>.from(playbackController.songs);
-      newCtrlSongs[ctrlIdx] = updatedSong;
+    final newCtrlSongs = List<SongModel>.from(playbackController.songs);
+    bool changedCtrl = false;
+    for (int i = 0; i < newCtrlSongs.length; i++) {
+      final u = findUpdated(newCtrlSongs[i]);
+      if (u != null) {
+        newCtrlSongs[i] = u;
+        changedCtrl = true;
+      }
+    }
+    if (changedCtrl) {
       playbackController.songs = newCtrlSongs;
     }
 
-    // 3. Update desktop scanner cache if running on desktop
-    if (!kIsWeb && defaultTargetPlatform != TargetPlatform.android) {
-      LocalAudioScanner.instance.updateCachedSong(
-        path: updatedSong.data,
-        song: updatedSong,
-      );
+    // 3. Update in playbackController.currentQueue
+    final newQueue = List<SongModel>.from(playbackController.currentQueue);
+    bool changedQueue = false;
+    for (int i = 0; i < newQueue.length; i++) {
+      final u = findUpdated(newQueue[i]);
+      if (u != null) {
+        newQueue[i] = u;
+        changedQueue = true;
+      }
+    }
+    if (changedQueue) {
+      playbackController.currentQueue = newQueue;
     }
 
-    // 4. Recompute library structure, album/artist views, and refresh UI instantaneously
+    // 4. Update albumMap in playbackController
+    for (final u in updatedSongs) {
+      final aId = u.albumId;
+      if (aId != null && playbackController.albumMap.containsKey(aId)) {
+        final oldAlbum = playbackController.albumMap[aId]!;
+        final m = Map<dynamic, dynamic>.from(oldAlbum.getMap);
+        if (u.album != null && u.album!.isNotEmpty) m['album'] = u.album;
+        final a = (u.getMap['album_artist'] ?? u.artist)?.toString();
+        if (a != null && a.isNotEmpty) m['artist'] = a;
+        playbackController.albumMap[aId] = AlbumModel(m);
+      }
+    }
+
+    // 5. Update desktop scanner cache if running on desktop
+    if (!kIsWeb && defaultTargetPlatform != TargetPlatform.android) {
+      for (final u in updatedSongs) {
+        LocalAudioScanner.instance.updateCachedSong(
+          path: u.data,
+          song: u,
+        );
+      }
+    }
+
+    // 6. Recompute library structure, album/artist views, and refresh UI instantaneously
     recomputeAllData();
 
     notifyListeners();
@@ -90,6 +143,33 @@ mixin TagEditorStateMixin on ChangeNotifier {
       return;
     }
 
+    await _executeWithSuspendedPlayback(action);
+  }
+
+  Future<void> runWithPlaybackSuspendedForBatchTagWrite(
+    Future<void> Function() action, {
+    Set<String>? targetFilePaths,
+    int itemCount = 1,
+  }) async {
+    final currentPlayingPath = playbackController.currentSong?.data;
+    if (targetFilePaths != null &&
+        targetFilePaths.isNotEmpty &&
+        currentPlayingPath != null &&
+        !targetFilePaths.contains(currentPlayingPath)) {
+      await action();
+      return;
+    }
+
+    final dynamicTimeout = Duration(
+      seconds: 120 + (itemCount * 10),
+    );
+    await _executeWithSuspendedPlayback(action, timeout: dynamicTimeout);
+  }
+
+  Future<void> _executeWithSuspendedPlayback(
+    Future<void> Function() action, {
+    Duration timeout = tagWriteTimeout,
+  }) async {
     final handler = audioHandler;
     final shouldSuspend =
         handler != null && handler.player == playbackController.player;
@@ -118,7 +198,7 @@ mixin TagEditorStateMixin on ChangeNotifier {
       );
 
       await action().timeout(
-        tagWriteTimeout,
+        timeout,
         onTimeout: () {
           throw TimeoutException('Tag write timed out. Please try again.');
         },
@@ -148,3 +228,4 @@ mixin TagEditorStateMixin on ChangeNotifier {
     }
   }
 }
+

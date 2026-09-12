@@ -133,8 +133,34 @@ class MainActivity : AudioServiceActivity() {
 							arrayOf(path)
 						)
 
-						// Also trigger MediaScannerConnection so the system extracts thumbnails or refreshes related caches
-						MediaScannerConnection.scanFile(this, arrayOf(path), null) { _, _ -> }
+						// Also trigger MediaScannerConnection to update thumbnails and system caches,
+						// and reinforce values in the scan callback to prevent scanner overwrites.
+						MediaScannerConnection.scanFile(this, arrayOf(path), null) { scannedPath, scannedUri ->
+							try {
+								val postScanValues = ContentValues().apply {
+									if (year != null && year > 0) put(MediaStore.Audio.Media.YEAR, year)
+									if (title != null) put(MediaStore.Audio.Media.TITLE, title)
+									if (artist != null) put(MediaStore.Audio.Media.ARTIST, artist)
+									if (album != null) put(MediaStore.Audio.Media.ALBUM, album)
+									if (track != null && track > 0) put(MediaStore.Audio.Media.TRACK, track)
+									if (genre != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+										put(MediaStore.Audio.Media.GENRE, genre)
+									}
+								}
+								if (postScanValues.size() > 0) {
+									if (scannedUri != null) {
+										contentResolver.update(scannedUri, postScanValues, null, null)
+									} else {
+										contentResolver.update(
+											MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+											postScanValues,
+											"${MediaStore.Audio.Media.DATA} = ?",
+											arrayOf(path)
+										)
+									}
+								}
+							} catch (_: Exception) {}
+						}
 
 						result.success(count > 0)
 					} catch (e: Exception) {

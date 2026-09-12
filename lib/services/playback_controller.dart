@@ -9,6 +9,8 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models/sort_mode.dart';
+import '../main.dart';
+import '../utils/song_sort_utils.dart';
 import 'app_local_store.dart';
 
 /// Comprehensive audio playback controller.
@@ -67,15 +69,47 @@ class PlaybackController {
     if (idx != null && idx >= 0 && idx < songs.length) {
       return songs[idx];
     }
+    final pIdx = _player.currentIndex;
+    if (pIdx != null && pIdx >= 0 && pIdx < _currentQueue.length) {
+      return _currentQueue[pIdx];
+    }
     return null;
   }
 
   // ── Library & playlist state ───────────────────────────────────────
   List<SongModel> songs = [];
+  List<SongModel> _currentQueue = [];
+  List<SongModel> get currentQueue {
+    if (_currentQueue.isNotEmpty) return _currentQueue;
+    final seq = _player.sequence;
+    if (seq.isNotEmpty) {
+      final out = <SongModel>[];
+      final songMap = {for (final s in songs) s.id: s};
+      for (final src in seq) {
+        final tag = src.tag;
+        if (tag is SongModel) {
+          out.add(tag);
+        } else if (tag is MediaItem) {
+          final id = int.tryParse(tag.id);
+          if (id != null && songMap.containsKey(id)) {
+            out.add(songMap[id]!);
+          }
+        }
+      }
+      if (out.isNotEmpty) {
+        _currentQueue = out;
+        return _currentQueue;
+      }
+    }
+    return songs;
+  }
+  set currentQueue(List<SongModel> list) => _currentQueue = list;
+
   Map<int, AlbumModel> albumMap = {};
   List<AudioSource>? libraryPlaylist;
   List<AudioSource>? currentPlaylist;
   bool _isLibraryActive = false;
+  bool get isLibraryActive => _isLibraryActive;
   SortMode sortMode = SortMode.albumArtistYear;
   bool isLoading = true;
 
@@ -322,6 +356,7 @@ class PlaybackController {
     if (index < 0 || index >= songs.length) return;
     currentSongId = songs[index].id;
     currentPlayIndex = index;
+    _currentQueue = List<SongModel>.from(songs);
 
     try {
       _suppressIndexUpdates = true;
@@ -359,6 +394,7 @@ class PlaybackController {
     if (queue.isEmpty) return;
     if (initialIndex < 0 || initialIndex >= queue.length) return;
 
+    _currentQueue = List<SongModel>.from(queue);
     final newPlaylist = buildPlaylist(queue);
     final songId = queue[initialIndex].id;
     final libraryIndex = songs.indexWhere((s) => s.id == songId);
@@ -396,12 +432,18 @@ class PlaybackController {
       0,
       _player.audioSources.length,
     );
+    if (_currentQueue.isNotEmpty && insertAt <= _currentQueue.length) {
+      _currentQueue.insert(insertAt, song);
+    }
     try {
       await _player.insertAudioSource(insertAt, sourceForSong(song));
     } catch (_) {}
   }
 
   Future<void> addToQueueEnd(SongModel song) async {
+    if (_currentQueue.isNotEmpty) {
+      _currentQueue.add(song);
+    }
     try {
       await _player.addAudioSource(sourceForSong(song));
     } catch (_) {}
@@ -410,6 +452,7 @@ class PlaybackController {
   // ── Sort ───────────────────────────────────────────────────────────
 
   Future<void> applySort(SortMode mode) async {
+    sortMode = mode;
     if (songs.isEmpty || currentPlaylist == null) return;
     final currentId =
         (currentPlayIndex != null &&
@@ -420,17 +463,7 @@ class PlaybackController {
     final wasPlaying = _player.playing;
     final pos = _player.position;
 
-    sortMode = mode;
-
-    final albumYearMap = <String, int>{};
-    for (final s in songs) {
-      final key = _albumKeyFor(s);
-      final y = _yearFromSong(s);
-      if (y > 0) {
-        final cur = albumYearMap[key];
-        if (cur == null || y < cur) albumYearMap[key] = y;
-      }
-    }
+    final albumYearMap = computeAlbumYearMap(songs);
 
     songs.sort((a, b) {
       switch (mode) {
@@ -442,8 +475,8 @@ class PlaybackController {
           final ac = _cs(_albumArtistFor(a), _albumArtistFor(b));
           if (ac != 0) return ac;
 
-          final keyA = _albumKeyFor(a);
-          final keyB = _albumKeyFor(b);
+          final keyA = albumIdentityKey(a);
+          final keyB = albumIdentityKey(b);
           if (keyA == keyB) {
             final tc = _compareDiscAndTrack(a, b);
             if (tc != 0) return tc;
@@ -458,8 +491,8 @@ class PlaybackController {
           if (tc != 0) return tc;
           return _cs(a.title, b.title);
         case SortMode.year:
-          final keyA = _albumKeyFor(a);
-          final keyB = _albumKeyFor(b);
+          final keyA = albumIdentityKey(a);
+          final keyB = albumIdentityKey(b);
           if (keyA == keyB) {
             final tc = _compareDiscAndTrack(a, b);
             if (tc != 0) return tc;
@@ -469,7 +502,9 @@ class PlaybackController {
           }
           final ya = albumYearMap[keyA] ?? 99999;
           final yb = albumYearMap[keyB] ?? 99999;
-          if (ya != yb) return ya.compareTo(yb);
+          final yaVal = ya == 0 ? 99999 : ya;
+          final ybVal = yb == 0 ? 99999 : yb;
+          if (yaVal != ybVal) return yaVal.compareTo(ybVal);
 
           final ac = _cs(_albumArtistFor(a), _albumArtistFor(b));
           if (ac != 0) return ac;
@@ -482,8 +517,8 @@ class PlaybackController {
           final ac = _cs(_albumArtistFor(a), _albumArtistFor(b));
           if (ac != 0) return ac;
 
-          final keyA = _albumKeyFor(a);
-          final keyB = _albumKeyFor(b);
+          final keyA = albumIdentityKey(a);
+          final keyB = albumIdentityKey(b);
           if (keyA == keyB) {
             final tc = _compareDiscAndTrack(a, b);
             if (tc != 0) return tc;
@@ -494,7 +529,9 @@ class PlaybackController {
 
           final ya = albumYearMap[keyA] ?? 99999;
           final yb = albumYearMap[keyB] ?? 99999;
-          if (ya != yb) return ya.compareTo(yb);
+          final yaVal = ya == 0 ? 99999 : ya;
+          final ybVal = yb == 0 ? 99999 : yb;
+          if (yaVal != ybVal) return yaVal.compareTo(ybVal);
 
           final alc = _cs(a.album ?? '', b.album ?? '');
           if (alc != 0) return alc;
@@ -506,6 +543,7 @@ class PlaybackController {
 
     currentPlaylist = buildPlaylist(songs);
     _isLibraryActive = true;
+    _currentQueue = List<SongModel>.from(songs);
 
     int? newIndex;
     if (currentId != null) {
@@ -522,8 +560,11 @@ class PlaybackController {
       if (wasPlaying) await _player.play();
       currentPlayIndex = newIndex;
     } else {
-      await _player.setAudioSources(currentPlaylist!);
       currentPlayIndex = null;
+      currentSongId = null;
+      if (wasPlaying) {
+        await _player.stop();
+      }
     }
   }
 
@@ -636,6 +677,142 @@ class PlaybackController {
   void setSuppressIndexUpdates(bool v) => _suppressIndexUpdates = v;
   bool get suppressIndexUpdates => _suppressIndexUpdates;
 
+  // ── Tag write playback suspension ─────────────────────────────────
+
+  /// Safely suspends playback, releases native decoder file locks, runs [action],
+  /// and seamlessly reconstructs fresh [AudioSource] instances to restore playback
+  /// at the exact same track, position, and queue state.
+  Future<void> runWithPlaybackSuspendedForTagWrite(
+    Future<void> Function() action, {
+    String? targetFilePath,
+  }) async {
+    final activeSong = currentSong;
+    String? currentPlayingPath = activeSong?.data;
+    if (currentPlayingPath == null && _player.currentIndex != null) {
+      final pIdx = _player.currentIndex!;
+      if (pIdx >= 0 && pIdx < _currentQueue.length) {
+        currentPlayingPath = _currentQueue[pIdx].data;
+      }
+    }
+
+    // If targetFilePath is specified and is NOT the song currently loaded in player,
+    // execute directly without interrupting playback!
+    if (targetFilePath != null &&
+        targetFilePath.isNotEmpty &&
+        currentPlayingPath != null &&
+        currentPlayingPath != targetFilePath) {
+      await action();
+      return;
+    }
+
+    final hasLoaded = _player.processingState != ProcessingState.idle &&
+        _player.audioSource != null &&
+        _player.sequence.isNotEmpty;
+    if (!hasLoaded) {
+      await action();
+      return;
+    }
+
+    final wasPlaying = _player.playing;
+    final index = _player.currentIndex ?? 0;
+    final pos = _player.position;
+    final currentId = currentSongId;
+    final activeQueue = List<SongModel>.from(currentQueue);
+
+    setSuppressIndexUpdates(true);
+    final handler = audioHandler;
+    final shouldSuspendBroadcast =
+        handler != null && handler.player == _player;
+
+    try {
+      pushAutoExitSuppress();
+      if (shouldSuspendBroadcast) {
+        handler.setStateBroadcastSuspended(true);
+      }
+
+      // Step 1: Pause and detach native decoder file lock
+      try {
+        await _player.pause();
+      } catch (_) {}
+      try {
+        await _player.stop();
+      } catch (_) {}
+      try {
+        await _player.setAudioSources([], preload: false);
+      } catch (_) {}
+
+      // Wait 200ms to allow native Android ExoPlayer / OS threads to close file descriptors.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      // Step 2: Perform tag/lyrics write action
+      await action();
+      // Step 2: Perform tag/lyrics write action with timeout guard
+      await action().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          debugPrint('Tag write action timed out after 8s');
+        },
+      );
+    } finally {
+      popAutoExitSuppress();
+      try {
+        // Step 3: Rebuild FRESH playlist from activeQueue
+        final queueToUse = activeQueue.isNotEmpty ? activeQueue : songs;
+        final freshPlaylist = buildPlaylist(queueToUse);
+        currentPlaylist = freshPlaylist;
+        if (_isLibraryActive) {
+          libraryPlaylist = freshPlaylist;
+        }
+
+        int targetIndex = index;
+        if (currentId != null) {
+          final foundIndex = queueToUse.indexWhere((s) => s.id == currentId);
+          if (foundIndex != -1) targetIndex = foundIndex;
+        }
+        if (targetIndex >= freshPlaylist.length) {
+          targetIndex = freshPlaylist.length - 1;
+        }
+        if (targetIndex < 0) targetIndex = 0;
+
+        if (freshPlaylist.isNotEmpty) {
+          await _player.setAudioSources(
+            freshPlaylist,
+            initialIndex: targetIndex,
+            initialPosition: pos,
+          );
+          await _player
+              .setAudioSources(
+                freshPlaylist,
+                initialIndex: targetIndex,
+                initialPosition: pos,
+              )
+              .timeout(
+                const Duration(seconds: 3),
+                onTimeout: () {
+                  debugPrint(
+                    'Timed out restoring audio sources after tag write',
+                  );
+                  return null;
+                },
+              );
+          if (wasPlaying) {
+            await _player.play();
+            unawaited(_player.play());
+          }
+        }
+      } catch (e, st) {
+        debugPrint('Failed to restore playback after tag write: $e');
+        debugPrintStack(stackTrace: st);
+      } finally {
+        if (shouldSuspendBroadcast) {
+          handler.setStateBroadcastSuspended(false);
+        }
+        setSuppressIndexUpdates(false);
+        _syncLibraryCurrentIndexFromPlayer(_player.currentIndex);
+      }
+    }
+  }
+
   // ── Dispose ────────────────────────────────────────────────────────
 
   Future<void> disposeController() async {
@@ -649,8 +826,6 @@ class PlaybackController {
   // ═══════════════════════════════════════════════════════════════════
   // Sort helpers (static / instance)
   // ═══════════════════════════════════════════════════════════════════
-
-  static final RegExp _yearRegex = RegExp(r'(19|20)\d{2}');
 
   static int _cs(String a, String b) => _compareSortStrings(a, b);
 
@@ -676,38 +851,17 @@ class PlaybackController {
     return t;
   }
 
-  int _yearFromSong(SongModel s) {
-    final v = s.getMap['year'];
-    if (v == null) return 0;
-    if (v is int) return v;
-    final raw = v.toString();
-    final direct = int.tryParse(raw);
-    if (direct != null) return direct;
-    final match = _yearRegex.firstMatch(raw);
-    if (match == null) return 0;
-    return int.tryParse(match.group(0)!) ?? 0;
-  }
-
-
   String _albumArtistFor(SongModel s) {
-    final raw = s.getMap['album_artist']?.toString();
+    final raw =
+        (s.getMap['album_artist'] ?? s.getMap['albumArtist'])?.toString();
     final fromSong = _normalizeSortText(raw ?? '');
     if (fromSong.isNotEmpty) return fromSong;
+    final fromSongArtist = _normalizeSortText(s.artist ?? '');
+    if (fromSongArtist.isNotEmpty) return fromSongArtist;
     final fromAlbum =
         _normalizeSortText(albumMap[s.albumId]?.artist ?? '');
     if (fromAlbum.isNotEmpty) return fromAlbum;
-    return _normalizeSortText(s.artist ?? '');
-  }
-
-  String _albumKeyFor(SongModel s) {
-    final artist = _albumArtistFor(s);
-    final album = _normalizeSortText(s.album ?? albumMap[s.albumId]?.album ?? '');
-    if (album.isNotEmpty) {
-      return '${artist.toLowerCase()}\u0000${album.toLowerCase()}';
-    }
-    final aid = s.albumId;
-    if (aid != null && aid > 0) return 'id_$aid';
-    return 'song_${s.id}';
+    return '';
   }
 
   int _discFromSong(SongModel s) {

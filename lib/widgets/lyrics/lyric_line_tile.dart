@@ -150,3 +150,4 @@ class _LyricLineTileState extends State<LyricLineTile> {
     );
   }
 }
+

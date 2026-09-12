@@ -40,12 +40,16 @@ int compareStrings(String a, String b) {
 }
 
 int yearFromSong(SongModel s) {
-  final v = s.getMap["year"];
+  final map = s.getMap;
+  dynamic v = map["year"];
+  if (v == null || v == 0 || v == '0') {
+    v = map["date"] ?? map["recording_time"];
+  }
   if (v == null) return 0;
-  if (v is int) return v;
+  if (v is int && v > 0) return v;
   final raw = v.toString();
   final direct = int.tryParse(raw);
-  if (direct != null) return direct;
+  if (direct != null && direct > 0) return direct;
   final match = _yearRegex.firstMatch(raw);
   if (match == null) return 0;
   return int.tryParse(match.group(0)!) ?? 0;
@@ -104,12 +108,14 @@ int compareDiscAndTrack(SongModel a, SongModel b) {
 }
 
 String albumArtistFor(SongModel s) {
-  final raw = s.getMap["album_artist"]?.toString();
+  final raw = (s.getMap["album_artist"] ?? s.getMap["albumArtist"])?.toString();
   final fromSong = normalizeSortText(raw ?? '');
   if (fromSong.isNotEmpty) return fromSong;
+  final fromSongArtist = normalizeSortText(s.artist ?? '');
+  if (fromSongArtist.isNotEmpty) return fromSongArtist;
   final fromAlbum = normalizeSortText(playbackController.albumMap[s.albumId]?.artist ?? '');
   if (fromAlbum.isNotEmpty) return fromAlbum;
-  return normalizeSortText(s.artist ?? '');
+  return '';
 }
 
 String albumIdentityKey(SongModel s) {
@@ -121,5 +127,53 @@ String albumIdentityKey(SongModel s) {
   final aid = s.albumId;
   if (aid != null && aid > 0) return 'album_id_$aid';
   return 'song_id_${s.id}';
+}
+
+/// Computes the representative release year for an album from the years of its songs.
+///
+/// The year assigned is the one associated with the most songs in the album.
+/// If all tracks have different years (or if there is a tie between most frequent years),
+/// the latest (highest) year is chosen. Returns 0 if no track has a valid year (> 0).
+int computeAlbumYearFromYears(Iterable<int> songYears) {
+  final valid = songYears.where((y) => y > 0).toList(growable: false);
+  if (valid.isEmpty) return 0;
+
+  final counts = <int, int>{};
+  for (final y in valid) {
+    counts[y] = (counts[y] ?? 0) + 1;
+  }
+
+  int maxCount = 0;
+  for (final c in counts.values) {
+    if (c > maxCount) maxCount = c;
+  }
+
+  int latestYear = 0;
+  for (final entry in counts.entries) {
+    if (entry.value == maxCount) {
+      if (entry.key > latestYear) latestYear = entry.key;
+    }
+  }
+
+  return latestYear;
+}
+
+/// Precomputes the representative album release year for every album among [songs],
+/// keyed by [albumIdentityKey].
+Map<String, int> computeAlbumYearMap(Iterable<SongModel> songs) {
+  final yearsByAlbumKey = <String, List<int>>{};
+  for (final s in songs) {
+    final key = albumIdentityKey(s);
+    final y = yearFromSong(s);
+    if (y > 0) {
+      (yearsByAlbumKey[key] ??= []).add(y);
+    }
+  }
+
+  final out = <String, int>{};
+  for (final entry in yearsByAlbumKey.entries) {
+    out[entry.key] = computeAlbumYearFromYears(entry.value);
+  }
+  return out;
 }
 

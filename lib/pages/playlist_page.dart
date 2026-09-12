@@ -375,21 +375,9 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
       case PlaylistSort.year:
         return 'Year';
       case PlaylistSort.albumArtistYear:
-        return 'Album Artist/Year';
+        return 'Album Artist / Year';
     }
   }
-
-
-
-
-
-
-
-
-
-
-
-
 
   Future<void> _applyPlaylistSort(PlaylistSort mode) async {
     if (!mounted) return;
@@ -410,17 +398,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
 
     // Precompute album-level year so all tracks in the same album sort together
     // regardless of per-track year tag differences.
-    final Map<String, int> albumYearMap = {};
-    for (final s in visible) {
-      final key = albumIdentityKey(s);
-      final y = yearFromSong(s);
-      if (y > 0) {
-        final existing = albumYearMap[key];
-        if (existing == null || y < existing) {
-          albumYearMap[key] = y;
-        }
-      }
-    }
+    final albumYearMap = computeAlbumYearMap(visible);
     int albumYear(SongModel s) {
       final y = albumYearMap[albumIdentityKey(s)] ?? 0;
       return y == 0 ? 99999 : y;
@@ -776,6 +754,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                                 ),
                                 const SizedBox(width: 12),
                                 const Text('Custom order (drag)'),
+                                const Text('Custom Order (Drag)'),
                               ],
                             ),
                           ),
@@ -848,6 +827,7 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                                 ),
                                 const SizedBox(width: 12),
                                 const Text('Album Artist & Year'),
+                                const Text('Album Artist / Year'),
                               ],
                             ),
                           ),
@@ -1157,68 +1137,15 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                           ),
                         );
                       } else {
-                        trailing = PopupMenuButton<String>(
-                          icon: Icon(
-                            Icons.more_vert_rounded,
-                            size: 20,
-                            color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                        trailing = Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Text(
+                            formatTime(song.duration ?? 0),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
                           ),
-                          tooltip: 'Track options',
-                          onSelected: (action) {
-                            HapticFeedback.selectionClick();
-                            if (action == 'remove') {
-                              _removeSongsByIds([song.id]);
-                            } else if (action == 'play_next') {
-                              playbackController.insertInQueue(song);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Playing next'),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            } else if (action == 'add_queue') {
-                              playbackController.addToQueueEnd(song);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Added to queue'),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'play_next',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.playlist_play_rounded, size: 20),
-                                  SizedBox(width: 12),
-                                  Text('Play next'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'add_queue',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.queue_music_rounded, size: 20),
-                                  SizedBox(width: 12),
-                                  Text('Add to queue'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuDivider(),
-                            PopupMenuItem(
-                              value: 'remove',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete_outline_rounded, size: 20, color: cs.error),
-                                  const SizedBox(width: 12),
-                                  Text('Remove from playlist', style: TextStyle(color: cs.error)),
-                                ],
-                              ),
-                            ),
-                          ],
                         );
                       }
 
@@ -1254,8 +1181,14 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
                             _toggleSelection(song.id);
                             return;
                           }
-                          HapticFeedback.selectionClick();
-                          _enterSelectionMode(song.id);
+                          HapticFeedback.mediumImpact();
+                          _showTrackOptionsSheet(
+                            context,
+                            song,
+                            index,
+                            songs,
+                            playbackController,
+                          );
                         },
                       );
 
@@ -1309,6 +1242,149 @@ class UserPlaylistPageState extends State<UserPlaylistPage> {
         },
       ),
       body: content,
+    );
+  }
+
+  void _showTrackOptionsSheet(
+    BuildContext context,
+    SongModel song,
+    int index,
+    List<SongModel> songs,
+    PlaybackController playbackController,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final songTitle =
+        song.title.trim().isEmpty ? 'Unknown Title' : song.title.trim();
+    final artist = (song.artist?.trim().isEmpty ?? true)
+        ? 'Unknown Artist'
+        : song.artist!.trim();
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: FastArtworkWidget(
+                          id: song.id,
+                          type: ArtworkType.AUDIO,
+                          width: 48,
+                          height: 48,
+                          nullArtworkWidget: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.music_note_rounded,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              songTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(sheetContext)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              artist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(sheetContext)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.playlist_play_rounded),
+                  title: const Text('Play next'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    playbackController.insertInQueue(song);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Playing next'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.queue_music_rounded),
+                  title: const Text('Add to queue'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    playbackController.addToQueueEnd(song);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Added to queue'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.checklist_rounded),
+                  title: const Text('Select track'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _enterSelectionMode(song.id);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.delete_outline_rounded, color: cs.error),
+                  title: Text(
+                    'Remove from playlist',
+                    style: TextStyle(color: cs.error),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _removeSongsByIds([song.id]);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

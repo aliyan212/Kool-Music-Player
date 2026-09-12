@@ -1,4 +1,5 @@
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:audiotags/audiotags.dart';
@@ -87,7 +88,7 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
     if (kIsWeb) return;
     if (defaultTargetPlatform != TargetPlatform.android) return;
     try {
-      await OnAudioQuery().scanMedia(path);
+      await OnAudioQuery().scanMedia(path).timeout(const Duration(seconds: 2));
     } catch (_) {}
   }
 
@@ -342,7 +343,7 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
         );
 
         if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-          await _scanMedia(widget.song.data);
+          unawaited(_scanMedia(widget.song.data));
         }
       }
 
@@ -397,11 +398,13 @@ class _TagEditorDialogState extends State<TagEditorDialog> {
         );
       }
 
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      Navigator.pop(context, true);
+
       widget.onSongUpdated?.call(updatedSong);
       widget.onSaved();
 
-      Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger?.showSnackBar(
         const SnackBar(
           content: Text('Tags saved successfully'),
           backgroundColor: Colors.green,

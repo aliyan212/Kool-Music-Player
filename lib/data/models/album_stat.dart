@@ -20,11 +20,12 @@ class ArtistAlbum {
 }
 
 class AlbumArtistStat {
-  AlbumArtistStat({required this.name});
+  AlbumArtistStat({required this.name, this.representativeSong});
 
   final String name;
   final Set<int> albumIds = <int>{};
   int trackCount = 0;
+  SongModel? representativeSong;
 
   int get albumCount => albumIds.length;
 }

@@ -48,9 +48,9 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _handleScroll() {
-    if (_showSearchInAppBar.value && _scrollController.offset > 50) {
-      _showSearchInAppBar.value = false;
-      FocusManager.instance.primaryFocus?.unfocus();
+    final shouldShow = _scrollController.hasClients && _scrollController.offset > 50;
+    if (_showSearchInAppBar.value != shouldShow) {
+      _showSearchInAppBar.value = shouldShow;
     }
   }
 

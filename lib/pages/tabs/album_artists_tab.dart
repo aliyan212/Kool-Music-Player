@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import '../../services/app_state_controller.dart';
 import '../../data/models/album_stat.dart';
 import '../../ui/shared/bottom_bars_gutter.dart';
+import '../../ui/shared/fast_artwork_widget.dart';
+import '../../utils/song_sort_utils.dart';
 
 class AlbumArtistsTab extends StatelessWidget {
   const AlbumArtistsTab({super.key});
@@ -26,13 +29,13 @@ class AlbumArtistsTab extends StatelessWidget {
         case AlbumArtistsSort.nameDesc:
           return 'Name (Z → A)';
         case AlbumArtistsSort.mostAlbums:
-          return 'Most albums';
+          return 'Most Albums';
         case AlbumArtistsSort.leastAlbums:
-          return 'Least albums';
+          return 'Least Albums';
         case AlbumArtistsSort.mostTracks:
-          return 'Most tracks';
+          return 'Most Tracks';
         case AlbumArtistsSort.leastTracks:
-          return 'Least tracks';
+          return 'Least Tracks';
       }
     }
 
@@ -151,6 +154,10 @@ class AlbumArtistsTab extends StatelessWidget {
                             HapticFeedback.selectionClick();
                             appState.openArtistPageByName(stat.name);
                           },
+                          onLongPress: () {
+                            HapticFeedback.mediumImpact();
+                            _showArtistOptionsModal(context, appState, stat);
+                          },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
@@ -158,16 +165,27 @@ class AlbumArtistsTab extends StatelessWidget {
                             ),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 46,
-                                  height: 46,
-                                  decoration: BoxDecoration(
-                                    color: cs.surfaceContainerHighest,
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: Icon(
-                                    Icons.person_rounded,
-                                    color: cs.onSurfaceVariant,
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: FastArtworkWidget(
+                                    id: stat.representativeSong?.albumId ??
+                                        stat.representativeSong?.id ??
+                                        0,
+                                    type: ArtworkType.ALBUM,
+                                    width: 48,
+                                    height: 48,
+                                    nullArtworkWidget: Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color: cs.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: Icon(
+                                        Icons.person_rounded,
+                                        color: cs.onSurfaceVariant,
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 14),
@@ -223,6 +241,139 @@ class AlbumArtistsTab extends StatelessWidget {
           ],
         ),
       );
+      },
+    );
+  }
+
+  void _showArtistOptionsModal(
+    BuildContext context,
+    AppStateController appState,
+    AlbumArtistStat stat,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final repId = stat.representativeSong?.albumId ??
+        stat.representativeSong?.id ??
+        0;
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: FastArtworkWidget(
+                          id: repId,
+                          type: ArtworkType.ALBUM,
+                          width: 48,
+                          height: 48,
+                          nullArtworkWidget: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.person_rounded,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              stat.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(sheetContext)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${stat.albumCount} albums • ${stat.trackCount} tracks',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(sheetContext)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.person_rounded),
+                  title: const Text('Open Artist'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    appState.openArtistPageByName(stat.name);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.play_arrow_rounded),
+                  title: const Text('Play All'),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    final target = stat.name.toLowerCase().trim();
+                    final artistSongs = appState.songs.where((s) {
+                      final a = (s.artist ?? '').toLowerCase().trim();
+                      final aa = albumArtistFor(s).toLowerCase().trim();
+                      return a == target || aa == target;
+                    }).toList();
+                    if (artistSongs.isNotEmpty) {
+                      await appState.playFromQueue(artistSongs, initialIndex: 0);
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.shuffle_rounded),
+                  title: const Text('Shuffle All'),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    final target = stat.name.toLowerCase().trim();
+                    final artistSongs = appState.songs.where((s) {
+                      final a = (s.artist ?? '').toLowerCase().trim();
+                      final aa = albumArtistFor(s).toLowerCase().trim();
+                      return a == target || aa == target;
+                    }).toList();
+                    if (artistSongs.isNotEmpty) {
+                      artistSongs.shuffle();
+                      await appState.playFromQueue(artistSongs, initialIndex: 0);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
       },
     );
   }

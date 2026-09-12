@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
+import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/format_utils.dart';
-import '../widgets/universal_song_tile.dart';
 
 
 
@@ -412,38 +412,93 @@ class _QueuePageState extends State<QueuePage> {
 
   Widget _buildCurrentSongTile(SongModel song) {
     final cs = Theme.of(context).colorScheme;
+    final textColor = cs.onSurface;
+    final textColorSecondary = cs.onSurfaceVariant;
+    final nullArtworkBg = cs.secondaryContainer.withValues(alpha: 0.55);
+    final nullArtworkIcon = cs.onSecondaryContainer.withValues(alpha: 0.7);
 
-    return UniversalSongTile(
-      song: song,
-      isCurrent: true,
-      artworkSize: 56,
-      artworkBorderRadius: BorderRadius.circular(10),
-      borderRadius: BorderRadius.circular(16),
+    return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(12),
-      backgroundColor: Color.alphaBlend(
-        cs.primary.withValues(alpha: 0.14),
-        cs.primaryContainer,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color.alphaBlend(cs.primary.withValues(alpha: 0.14), cs.primaryContainer),
+            Color.alphaBlend(cs.secondary.withValues(alpha: 0.1), cs.secondaryContainer),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
       ),
-      borderColor: cs.primary.withValues(alpha: 0.2),
-      trailing: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: cs.tertiaryContainer,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Icon(
-          Icons.equalizer_rounded,
-          color: cs.onTertiaryContainer,
-          size: 20,
-        ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: FastArtworkWidget(
+              id: song.id,
+              type: ArtworkType.AUDIO,
+              width: 56,
+              height: 56,
+              keepOldArtwork: true,
+              nullArtworkWidget: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: nullArtworkBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.music_note, color: nullArtworkIcon),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  song.title,
+                  style: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  song.artist ?? 'Unknown Artist',
+                  style: TextStyle(color: textColorSecondary, fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: cs.tertiaryContainer,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              Icons.equalizer_rounded,
+              color: cs.onTertiaryContainer,
+              size: 20,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildQueueTile(SongModel song, int queueIndex, int displayIndex) {
     final cs = Theme.of(context).colorScheme;
+    final textColor = cs.onSurface;
     final textColorTertiary = cs.onSurfaceVariant;
+    final nullArtworkBg = cs.secondaryContainer.withValues(alpha: 0.5);
+    final nullArtworkIcon = cs.onSecondaryContainer.withValues(alpha: 0.72);
     final dragHandleColor = cs.onSurfaceVariant.withValues(alpha: 0.8);
     final tileBg = Color.alphaBlend(cs.primary.withValues(alpha: 0.03), cs.surface);
     final tileBorder = cs.outlineVariant.withValues(alpha: 0.38);
@@ -490,76 +545,132 @@ class _QueuePageState extends State<QueuePage> {
           ],
         ),
       ),
-      child: UniversalSongTile(
-        song: song,
-        artworkSize: 50,
-        artworkBorderRadius: BorderRadius.circular(10),
-        borderRadius: BorderRadius.circular(14),
-        backgroundColor: tileBg,
-        borderColor: tileBorder,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        prefixLeading: ReorderableDelayedDragStartListener(
-          index: displayIndex,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: cs.secondaryContainer.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Text(
-                    '${displayIndex + 1}',
-                    style: TextStyle(
-                      color: dragHandleColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
+      child: RepaintBoundary(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: tileBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: tileBorder),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () {
+                widget.onPlayIndex(queueIndex);
+                setState(() => _currentIndex = queueIndex);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                child: Row(
+                  children: [
+                    ReorderableDelayedDragStartListener(
+                      index: displayIndex,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 26,
+                              height: 26,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: cs.secondaryContainer.withValues(alpha: 0.7),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Text(
+                                '${displayIndex + 1}',
+                                style: TextStyle(
+                                  color: dragHandleColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Icon(
+                              Icons.drag_handle_rounded,
+                              color: dragHandleColor,
+                              size: 18,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: FastArtworkWidget(
+                        id: song.id,
+                        type: ArtworkType.AUDIO,
+                        width: 50,
+                        height: 50,
+                        keepOldArtwork: true,
+                        nullArtworkWidget: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: nullArtworkBg,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.music_note,
+                            color: nullArtworkIcon,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            song.title,
+                            style: TextStyle(
+                              color: textColor,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            song.artist ?? 'Unknown Artist',
+                            style: TextStyle(color: textColorTertiary, fontSize: 12),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      formatTime(song.duration),
+                      style: TextStyle(color: textColorTertiary, fontSize: 12),
+                    ),
+                    IconButton.filledTonal(
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: cs.onErrorContainer,
+                        size: 20,
+                      ),
+                      style: IconButton.styleFrom(
+                        backgroundColor: cs.errorContainer,
+                      ),
+                      onPressed: () => _removeItem(queueIndex, songId: song.id),
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                Icon(
-                  Icons.drag_handle_rounded,
-                  color: dragHandleColor,
-                  size: 18,
-                ),
-              ],
+              ),
             ),
           ),
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              formatTime(song.duration),
-              style: TextStyle(color: textColorTertiary, fontSize: 12),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(
-              icon: Icon(
-                Icons.close_rounded,
-                color: cs.onErrorContainer,
-                size: 20,
-              ),
-              style: IconButton.styleFrom(
-                backgroundColor: cs.errorContainer,
-              ),
-              onPressed: () => _removeItem(queueIndex, songId: song.id),
-              padding: const EdgeInsets.all(8),
-              constraints: const BoxConstraints(),
-            ),
-          ],
-        ),
-        onTap: () {
-          widget.onPlayIndex(queueIndex);
-          setState(() => _currentIndex = queueIndex);
-        },
       ),
     );
   }

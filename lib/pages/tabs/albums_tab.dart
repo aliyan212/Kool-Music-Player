@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/app_state_controller.dart';
 import '../../data/models/album_stat.dart';
+import '../../dialogs/batch_tag_editor_dialog.dart';
 import '../../ui/shared/fast_artwork_widget.dart';
 import '../../ui/shared/bottom_bars_gutter.dart';
+import '../../utils/song_sort_utils.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 class AlbumsTab extends StatelessWidget {
@@ -97,24 +99,24 @@ class AlbumsTab extends StatelessWidget {
                     PopupMenuDivider(),
                     PopupMenuItem(
                       value: AlbumsSort.yearDesc,
-                      child: Text('Year (newest first)'),
+                      child: Text('Year (Newest First)'),
                     ),
                     PopupMenuItem(
                       value: AlbumsSort.yearAsc,
-                      child: Text('Year (oldest first)'),
+                      child: Text('Year (Oldest First)'),
                     ),
                     PopupMenuItem(
                       value: AlbumsSort.albumArtistYear,
-                      child: Text('Album artist / year'),
+                      child: Text('Album Artist / Year'),
                     ),
                     PopupMenuDivider(),
                     PopupMenuItem(
                       value: AlbumsSort.mostTracks,
-                      child: Text('Most tracks'),
+                      child: Text('Most Tracks'),
                     ),
                     PopupMenuItem(
                       value: AlbumsSort.leastTracks,
-                      child: Text('Least tracks'),
+                      child: Text('Least Tracks'),
                     ),
                   ],
                 ),
@@ -178,6 +180,16 @@ class AlbumsTab extends StatelessWidget {
                             HapticFeedback.selectionClick();
                             appState.openAlbumPageFromSong(song);
                           },
+                          onLongPress: () {
+                            HapticFeedback.mediumImpact();
+                            _showAlbumOptionsModal(
+                              context,
+                              appState,
+                              song,
+                              title,
+                              subtitle,
+                            );
+                          },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
@@ -240,11 +252,6 @@ class AlbumsTab extends StatelessWidget {
                                     ],
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                Icon(
-                                  Icons.chevron_right_rounded,
-                                  color: cs.onSurfaceVariant,
-                                ),
                               ],
                             ),
                           ),
@@ -259,6 +266,143 @@ class AlbumsTab extends StatelessWidget {
           ],
         ),
       );
+      },
+    );
+  }
+
+  void _showAlbumOptionsModal(
+    BuildContext context,
+    AppStateController appState,
+    SongModel song,
+    String title,
+    String subtitle,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final albumId = song.albumId ?? song.id;
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: FastArtworkWidget(
+                          id: albumId,
+                          type: ArtworkType.ALBUM,
+                          width: 48,
+                          height: 48,
+                          nullArtworkWidget: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.album_rounded,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(sheetContext)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(sheetContext)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.play_arrow_rounded),
+                  title: const Text('Play Album'),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    final targetKey = albumIdentityKey(song);
+                    final albumSongs = appState.songs
+                        .where((s) => albumIdentityKey(s) == targetKey)
+                        .toList();
+                    albumSongs.sort(compareDiscAndTrack);
+                    if (albumSongs.isNotEmpty) {
+                      await appState.playFromQueue(albumSongs, initialIndex: 0);
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.tune_rounded),
+                  title: const Text('Edit Album Tags'),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    final targetKey = albumIdentityKey(song);
+                    final albumSongs = appState.songs
+                        .where((s) => albumIdentityKey(s) == targetKey)
+                        .toList();
+                    albumSongs.sort(compareDiscAndTrack);
+                    if (albumSongs.isEmpty) return;
+                    await showDialog<void>(
+                      context: context,
+                      builder: (ctx) => BatchTagEditorDialog(
+                        songs: albumSongs,
+                        onSaved: () {},
+                        onSongsUpdated: (updatedSongs) {
+                          appState.updateSongsMetadataInPlace(updatedSongs);
+                        },
+                        runWithPlaybackSuspended: (action) =>
+                            appState.runWithPlaybackSuspendedForBatchTagWrite(
+                              action,
+                              targetFilePaths: albumSongs
+                                  .map((s) => s.data)
+                                  .toSet(),
+                              itemCount: albumSongs.length,
+                            ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
       },
     );
   }

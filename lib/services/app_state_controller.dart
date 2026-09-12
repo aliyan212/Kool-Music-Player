@@ -40,6 +40,7 @@ class AppStateController extends ChangeNotifier
       recomputePlayHistoryStats();
       notifyListeners();
     };
+    unawaited(loadSavedSortPreferences());
   }
 
   @override
@@ -68,6 +69,9 @@ class AppStateController extends ChangeNotifier
 
   static const String _includedFoldersKey = "included_folders";
   static const String _excludedFoldersKey = "excluded_folders";
+  static const String _librarySortKey = "library_sort_mode_v1";
+  static const String _albumsSortKey = "albums_sort_mode_v1";
+  static const String _albumArtistsSortKey = "album_artists_sort_mode_v1";
 
   List<AlbumArtistStat> cachedAlbumArtists = <AlbumArtistStat>[];
   List<AlbumTabStat> cachedAlbums = <AlbumTabStat>[];
@@ -106,15 +110,20 @@ class AppStateController extends ChangeNotifier
     final representativeByAlbumKey = <String, SongModel>{};
     final trackCountByAlbumKey = <String, int>{};
     final minYearByAlbumKey = <String, int>{};
+    final albumYearByKey = computeAlbumYearMap(songs);
 
     for (final s in songs) {
       final artistName = _displayArtistName(albumArtistFor(s));
       final artistKey = artistName.toLowerCase();
       final artistStat = artistStatByKey.putIfAbsent(
         artistKey,
-        () => AlbumArtistStat(name: artistName),
+        () => AlbumArtistStat(name: artistName, representativeSong: s),
       );
       artistStat.trackCount++;
+      if (artistStat.representativeSong == null ||
+          ((artistStat.representativeSong!.albumId ?? 0) <= 0 && (s.albumId ?? 0) > 0)) {
+        artistStat.representativeSong = s;
+      }
 
       final albumKey = albumIdentityKey(s);
       artistStat.albumIds.add(albumKey.hashCode);
@@ -191,7 +200,7 @@ class AppStateController extends ChangeNotifier
                 title: title,
                 artist: artist,
                 trackCount: trackCountByAlbumKey[albumKey] ?? 0,
-                year: minYearByAlbumKey[albumKey] ?? 0,
+                year: albumYearByKey[albumKey] ?? 0,
               );
             })
             .toList(growable: false)
@@ -332,6 +341,7 @@ class AppStateController extends ChangeNotifier
     if (kIsWeb) {
       permissionState = LibraryPermissionState.granted;
     notifyListeners();
+      await loadSavedSortPreferences();
       await loadIncludedFolders();
       await loadExcludedFolders();
       await _loadPlayHistory();
@@ -344,6 +354,7 @@ class AppStateController extends ChangeNotifier
       // Keep behavior simple for non-Android targets.
       permissionState = LibraryPermissionState.granted;
     notifyListeners();
+      await loadSavedSortPreferences();
       await loadIncludedFolders();
       await loadExcludedFolders();
       await _loadPlayHistory();
@@ -361,6 +372,7 @@ class AppStateController extends ChangeNotifier
         permissionState = LibraryPermissionState.granted;
     notifyListeners();
       }
+      await loadSavedSortPreferences();
       await loadIncludedFolders();
       await loadExcludedFolders();
       await _loadPlayHistory();
@@ -512,6 +524,9 @@ class AppStateController extends ChangeNotifier
       _controller.currentPlaylist = _controller.libraryPlaylist;
 
       songs = processedSongs;
+      await _controller.applySort(_controller.sortMode);
+
+      songs = _controller.songs;
         recomputeAllData();
         isLoading = false;
     notifyListeners();
@@ -597,12 +612,15 @@ class AppStateController extends ChangeNotifier
     }
 
     String albumArtistFor(SongModel s, AlbumModel? album) {
-      final raw = s.getMap["album_artist"]?.toString();
+      final raw =
+          (s.getMap["album_artist"] ?? s.getMap["albumArtist"])?.toString();
       final fromSong = normalize(raw ?? '');
       if (fromSong.isNotEmpty) return fromSong;
+      final fromSongArtist = normalize(s.artist ?? '');
+      if (fromSongArtist.isNotEmpty) return fromSongArtist;
       final fromAlbum = normalize(album?.artist ?? '');
       if (fromAlbum.isNotEmpty) return fromAlbum;
-      return normalize(s.artist ?? '');
+      return '';
     }
 
     String albumFor(SongModel s, AlbumModel? album) =>
@@ -773,20 +791,87 @@ class AppStateController extends ChangeNotifier
     );
   }
 
-  
-  void applyAlbumArtistsSort(AlbumArtistsSort mode) {
+  Future<void> loadSavedSortPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final libSortName = prefs.getString(_librarySortKey);
+      if (libSortName != null) {
+        for (final m in SortMode.values) {
+          if (m.name == libSortName) {
+            _controller.sortMode = m;
+            break;
+          }
+        }
+      }
+
+      final albumsSortName = prefs.getString(_albumsSortKey);
+      if (albumsSortName != null) {
+        for (final m in AlbumsSort.values) {
+          if (m.name == albumsSortName) {
+            albumsSort = m;
+            break;
+          }
+        }
+      }
+
+      final albumArtistsSortName = prefs.getString(_albumArtistsSortKey);
+      if (albumArtistsSortName != null) {
+        for (final m in AlbumArtistsSort.values) {
+          if (m.name == albumArtistsSortName) {
+            albumArtistsSort = m;
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading saved sort preferences: $e');
+    }
+  }
+
+  Future<void> saveLibrarySortPreference(SortMode mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_librarySortKey, mode.name);
+    } catch (e) {
+      debugPrint('Error saving library sort preference: $e');
+    }
+  }
+
+  Future<void> saveAlbumsSortPreference(AlbumsSort mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_albumsSortKey, mode.name);
+    } catch (e) {
+      debugPrint('Error saving albums sort preference: $e');
+    }
+  }
+
+  Future<void> saveAlbumArtistsSortPreference(AlbumArtistsSort mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_albumArtistsSortKey, mode.name);
+    } catch (e) {
+      debugPrint('Error saving album artists sort preference: $e');
+    }
+  }
+
+  Future<void> applyAlbumArtistsSort(AlbumArtistsSort mode) async {
     albumArtistsSort = mode;
+    await saveAlbumArtistsSortPreference(mode);
     recomputeAllData();
     notifyListeners();
   }
 
-  void applyAlbumsSort(AlbumsSort mode) {
+  Future<void> applyAlbumsSort(AlbumsSort mode) async {
     albumsSort = mode;
+    await saveAlbumsSortPreference(mode);
     recomputeAllData();
     notifyListeners();
   }
 
   Future<void> applySort(SortMode mode) async {
+    await saveLibrarySortPreference(mode);
     await _controller.applySort(mode);
     songs = _controller.songs;
     recomputeAllData();
