@@ -1,36 +1,27 @@
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:go_router/go_router.dart';
-import '../dialogs/playlist_dialogs.dart';
 import 'dart:async';
-import 'dart:convert';
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../android_notifications.dart';
 import '../data/models/album_stat.dart';
 import '../data/models/isolate_data.dart';
 import '../data/models/sort_mode.dart';
-import '../data/models/user_playlist.dart';
 import '../dialogs/folder_management_dialog.dart';
 import '../main.dart';
-import '../platform_exit.dart';
-import '../services/app_local_store.dart';
 import '../services/local_audio_scanner.dart';
 import '../services/playback_controller.dart';
 import '../ui/shared/fast_artwork_widget.dart';
 import '../utils/song_sort_utils.dart';
-import '../utils/tag_write_access.dart';
-import '../widgets/song_options_sheet.dart';
+import 'mixins/navigation_state_mixin.dart';
+import 'mixins/playlist_management_mixin.dart';
+import 'mixins/tag_editor_state_mixin.dart';
 
-import '../pages/album_page.dart';
-import '../pages/artist_page.dart';
-import '../pages/now_playing_page.dart';
-import '../pages/playlist_page.dart';
+export 'mixins/navigation_state_mixin.dart';
+export 'mixins/playlist_management_mixin.dart';
+export 'mixins/tag_editor_state_mixin.dart';
 
 const List<String> _defaultExcludedFolderFragments = [
   '/storage/emulated/0/Ringtones',
@@ -38,13 +29,10 @@ const List<String> _defaultExcludedFolderFragments = [
   '/storage/emulated/0/Recordings',
 ];
 
-
-
-
 enum LibraryPermissionState { unknown, granted, denied, permanentlyDenied }
 
-class AppStateController extends ChangeNotifier {
-  final SearchController searchController = SearchController();
+class AppStateController extends ChangeNotifier
+    with NavigationStateMixin, PlaylistManagementMixin, TagEditorStateMixin {
   static final AppStateController instance = AppStateController._();
   AppStateController._() {
     _controller.attachStreamListeners();
@@ -53,9 +41,11 @@ class AppStateController extends ChangeNotifier {
       notifyListeners();
     };
   }
-  
+
+  @override
   BuildContext get context => navigatorKey.currentContext!;
 
+  @override
   void showSnackBar(SnackBar snackBar, {BuildContext? context}) {
     final ctx = context ?? navigatorKey.currentContext;
     if (ctx != null && ctx.mounted) {
@@ -64,24 +54,9 @@ class AppStateController extends ChangeNotifier {
   }
 
   final PlaybackController _controller = playbackController;
-  final AppLocalStore _localStore = AppLocalStore.instance;
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
-
-  late int selectedTabIndex;
-
-  void selectTab(int index) {
-    if (isSelectionMode) exitSelectionMode();
-    if (inlineDetailContent != null) {
-      inlineDetailContent = null;
-    }
-    selectedTabIndex = index;
-    notifyListeners();
-  }
-
-  bool nowPlayingRouteActive = false;
-  DateTime? _lastNowPlayingClosedAt;
-
+  @override
   List<SongModel> songs = [];
   bool isLoading = true;
   LibraryPermissionState permissionState = LibraryPermissionState.unknown;
@@ -94,21 +69,11 @@ class AppStateController extends ChangeNotifier {
   static const String _includedFoldersKey = "included_folders";
   static const String _excludedFoldersKey = "excluded_folders";
 
-  static const String _userPlaylistsKey = 'user_playlists_v1';
-
-  bool isSelectionMode = false;
-  final Set<int> selectedSongIds = <int>{};
-
-  List<UserPlaylist> userPlaylists = <UserPlaylist>[];
   List<AlbumArtistStat> cachedAlbumArtists = <AlbumArtistStat>[];
   List<AlbumTabStat> cachedAlbums = <AlbumTabStat>[];
   List<SongModel> cachedMostPlayed = <SongModel>[];
   List<SongModel> cachedRecentlyPlayed = <SongModel>[];
   List<SongModel> cachedRecentlyAdded = <SongModel>[];
-  Map<String, int> cachedUserPlaylistTrackCounts = <String, int>{};
-
-  bool hideBottomBars = false;
-  Widget? inlineDetailContent;
 
 
   
@@ -127,6 +92,7 @@ class AppStateController extends ChangeNotifier {
 
   int _yearValueForCompare(int y) => y == 0 ? 99999 : y;
 
+  @override
   void recomputeAllData() {
     recomputeLibraryStructure();
     recomputePlayHistoryStats();
@@ -352,153 +318,6 @@ class AppStateController extends ChangeNotifier {
     cachedRecentlyPlayed = recentlyPlayed;
   }
 
-  
-
-  void showInlineDetail(Widget detailContent) {
-    
-    inlineDetailContent = detailContent;
-      hideBottomBars = false;
-    notifyListeners();
-  }
-
-  void closeInlineDetail() {
-    
-    if (inlineDetailContent == null) return;
-    inlineDetailContent = null;
-    notifyListeners();
-  }
-
-  void openSearch() {
-    if (selectedTabIndex != 0) {
-      selectTab(0);
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (searchController.isAttached && !searchController.isOpen) {
-        searchController.openView();
-      }
-    });
-  }
-
-  void enterSelectionMode({int? initialSongId}) {
-    if (searchController.isAttached && searchController.isOpen) {
-      searchController.closeView(searchController.text);
-      FocusManager.instance.primaryFocus?.unfocus();
-    }
-    isSelectionMode = true;
-      selectedSongIds.clear();
-      if (initialSongId != null) selectedSongIds.add(initialSongId);
-    notifyListeners();
-  }
-
-  void exitSelectionMode() {
-    if (!isSelectionMode) return;
-    isSelectionMode = false;
-      selectedSongIds.clear();
-    notifyListeners();
-  }
-
-  void toggleSelectedSongId(int songId) {
-    if (selectedSongIds.contains(songId)) {
-        selectedSongIds.remove(songId);
-        if (selectedSongIds.isEmpty) isSelectionMode = false;
-      } else {
-        selectedSongIds.add(songId);
-        isSelectionMode = true;
-      }
-    notifyListeners();
-  }
-
-  Future<void> loadUserPlaylists() async {
-    try {
-      List<dynamic>? decoded = await _localStore.readUserPlaylists();
-      if (decoded == null) {
-        final prefs = await SharedPreferences.getInstance();
-        final raw = prefs.getString(_userPlaylistsKey);
-        if (raw != null && raw.trim().isNotEmpty) {
-          final parsed = jsonDecode(raw);
-          if (parsed is List) {
-            decoded = parsed;
-            await _localStore.writeUserPlaylists(
-              parsed
-                  .whereType<Map>()
-                  .map((e) => Map<String, dynamic>.from(e))
-                  .toList(growable: false),
-            );
-            await _localStore.markUserPlaylistsMigrated();
-          }
-        }
-      }
-
-      if (decoded == null) {
-        userPlaylists = <UserPlaylist>[];
-        recomputeAllData();
-        notifyListeners();
-        return;
-      }
-
-      final list = <UserPlaylist>[];
-      for (final item in decoded) {
-        final pl = UserPlaylist.fromJson(item);
-        if (pl == null) continue;
-        list.add(pl);
-      }
-      userPlaylists = list;
-      recomputeAllData();
-      notifyListeners();
-    } catch (_) {
-      userPlaylists = <UserPlaylist>[];
-      recomputeAllData();
-      notifyListeners();
-    }
-  }
-
-  Future<void> _saveUserPlaylists() async {
-    try {
-      await _localStore.writeUserPlaylists(
-        userPlaylists.map((p) => p.toJson()).toList(growable: false),
-      );
-    } catch (_) {
-      // Best-effort; do not crash UI.
-    }
-  }
-
-  Future<UserPlaylist?> createNewPlaylist(String name) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final playlist = UserPlaylist(
-      id: _newPlaylistId(),
-      name: name,
-      songIds: const <int>[],
-      createdAtMs: now,
-      updatedAtMs: now,
-    );
-    userPlaylists = <UserPlaylist>[playlist, ...userPlaylists];
-    cachedUserPlaylistTrackCounts[playlist.id] = 0;
-    recomputeAllData();
-    notifyListeners();
-    await _saveUserPlaylists();
-    return playlist;
-  }
-
-  Future<void> renamePlaylist(UserPlaylist playlist, String newName) async {
-    final idx = userPlaylists.indexWhere((p) => p.id == playlist.id);
-    if (idx == -1) return;
-    userPlaylists[idx] = playlist.copyWith(
-      name: newName,
-      updatedAtMs: DateTime.now().millisecondsSinceEpoch,
-    );
-    recomputeAllData();
-    notifyListeners();
-    await _saveUserPlaylists();
-  }
-
-  Future<void> deletePlaylist(UserPlaylist playlist) async {
-    userPlaylists.removeWhere((p) => p.id == playlist.id);
-    cachedUserPlaylistTrackCounts.remove(playlist.id);
-    recomputeAllData();
-    notifyListeners();
-    await _saveUserPlaylists();
-  }
-
   String _normalizeFolderPath(String path) {
     return path.trim().replaceAll(RegExp(r'/+$'), '');
   }
@@ -506,390 +325,6 @@ class AppStateController extends ChangeNotifier {
   int _compareStrings(String a, String b) {
     return a.compareTo(b);
   }
-
-  String _basename(String path) {
-    var p = path.trim();
-    if (p.startsWith('file://')) {
-      try {
-        p = Uri.parse(p).toFilePath();
-      } catch (_) {
-        // fall through
-      }
-    }
-    // Strip any query/fragment if a URI-like string sneaks in.
-    final q = p.indexOf('?');
-    if (q != -1) p = p.substring(0, q);
-    final h = p.indexOf('#');
-    if (h != -1) p = p.substring(0, h);
-
-    p = p.replaceAll('\\', '/');
-    final idx = p.lastIndexOf('/');
-    if (idx == -1) return p;
-    return p.substring(idx + 1);
-  }
-
-  String _stripExtension(String filename) {
-    final dot = filename.lastIndexOf('.');
-    if (dot <= 0) return filename;
-    return filename.substring(0, dot);
-  }
-
-  String _uniquePlaylistName(String base) {
-    final existing = userPlaylists
-        .map((p) => p.name.trim().toLowerCase())
-        .toSet();
-    var candidate = base.trim();
-    if (candidate.isEmpty) candidate = 'Playlist';
-    if (!existing.contains(candidate.toLowerCase())) return candidate;
-
-    for (var i = 2; i < 1000; i++) {
-      final next = '$candidate ($i)';
-      if (!existing.contains(next.toLowerCase())) return next;
-    }
-    // Fallback: append timestamp.
-    return '$candidate (${DateTime.now().millisecondsSinceEpoch})';
-  }
-
-  Future<void> importM3uPlaylistFlow() async {
-    
-    try {
-      final picked = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['m3u', 'm3u8'],
-        withData: true,
-        allowMultiple: false,
-      );
-      if (picked == null || picked.files.isEmpty) return;
-      final f = picked.files.single;
-      final bytes = f.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        showSnackBar(
-          const SnackBar(
-            content: Text('Could not read playlist file'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
-
-      final text = utf8.decode(bytes, allowMalformed: true);
-      final lines = const LineSplitter().convert(text);
-      final entries = <String>[];
-      for (final raw in lines) {
-        final line = raw.trim();
-        if (line.isEmpty) continue;
-        if (line.startsWith('#')) continue;
-        entries.add(line);
-      }
-
-      if (entries.isEmpty) {
-        showSnackBar(
-          const SnackBar(
-            content: Text('No tracks found in .m3u'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
-
-      final byData = <String, int>{};
-      final byUri = <String, int>{};
-      final byBase = <String, List<int>>{};
-      for (final s in songs) {
-        final data = s.data.trim();
-        if (data.isNotEmpty) byData[data.toLowerCase()] = s.id;
-        final uri = (s.uri ?? '').trim();
-        if (uri.isNotEmpty) byUri[uri.toLowerCase()] = s.id;
-        final base = _basename(data).toLowerCase();
-        if (base.isNotEmpty) {
-          (byBase[base] ??= <int>[]).add(s.id);
-        }
-      }
-
-      final songIds = <int>[];
-      final seen = <int>{};
-      for (final e in entries) {
-        var entry = e.trim();
-        if ((entry.startsWith('"') && entry.endsWith('"')) ||
-            (entry.startsWith("'") && entry.endsWith("'"))) {
-          entry = entry.substring(1, entry.length - 1).trim();
-        }
-
-        String normalized = entry;
-        if (normalized.startsWith('file://')) {
-          try {
-            normalized = Uri.parse(normalized).toFilePath();
-          } catch (_) {
-            // keep as-is
-          }
-        }
-        normalized = normalized.replaceAll('\\', '/');
-
-        int? id;
-        id ??= byData[normalized.toLowerCase()];
-        id ??= byUri[entry.toLowerCase()];
-        if (id == null) {
-          final base = _basename(normalized).toLowerCase();
-          final candidates = byBase[base];
-          if (candidates != null && candidates.isNotEmpty) {
-            id = candidates.first;
-          }
-        }
-
-        if (id == null) continue;
-        if (seen.add(id)) songIds.add(id);
-      }
-
-      if (songIds.isEmpty) {
-        showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not match any tracks from the .m3u to your library',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
-
-      final filename = (f.name).trim();
-      final baseName = _stripExtension(filename);
-      final playlistName = _uniquePlaylistName(
-        baseName.isEmpty ? 'Imported playlist' : baseName,
-      );
-
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final playlist = UserPlaylist(
-        id: _newPlaylistId(),
-        name: playlistName,
-        songIds: songIds,
-        createdAtMs: now,
-        updatedAtMs: now,
-      );
-      userPlaylists = <UserPlaylist>[playlist, ...userPlaylists];
-        recomputeAllData();
-    notifyListeners();
-      await _saveUserPlaylists();
-
-      showSnackBar(
-        SnackBar(
-          content: Text(
-            'Imported ${songIds.length} track${songIds.length == 1 ? '' : 's'} to "$playlistName"',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
-      // Open the imported playlist.
-      openUserPlaylistPage(playlist);
-    } catch (_) {
-      showSnackBar(
-        const SnackBar(
-          content: Text('Failed to import playlist'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  void openUserPlaylistPage(UserPlaylist playlist) {
-    final playlistId = playlist.id;
-    showInlineDetail(
-      UserPlaylistPage(
-        player: _controller.player,
-        playlistId: playlistId,
-        playlistName: playlist.name,
-        initialSongIds: playlist.songIds,
-        librarySongs: songs,
-        onQueueChanged: (_) {},
-        selectedTabIndex: selectedTabIndex,
-        onNavigateTab: selectTab,
-        embeddedInHome: true,
-        onClose: closeInlineDetail,
-        onOpenNowPlaying: (s) {
-          if (nowPlayingRouteActive) {
-            Navigator.of(context).pop();
-            return;
-          }
-          openNowPlaying(s);
-        },
-        playFromQueue: (songs, initialIndex) async {
-          await _controller.playFromQueue(songs, initialIndex: initialIndex);
-        },
-        onUpdateSongIds: (id, newSongIds) async {
-          final idx = userPlaylists.indexWhere((p) => p.id == id);
-          if (idx == -1) return;
-          final now = DateTime.now().millisecondsSinceEpoch;
-          final existing = userPlaylists[idx];
-            userPlaylists = List<UserPlaylist>.from(
-              userPlaylists,
-            )..[idx] = existing.copyWith(songIds: newSongIds, updatedAtMs: now);
-            recomputeAllData();
-    notifyListeners();
-          await _saveUserPlaylists();
-        },
-      ),
-    );
-  }
-
-  void reorderUserPlaylists(int oldIndex, int newIndex) {
-    if (oldIndex < 0 || oldIndex >= userPlaylists.length) return;
-    if (newIndex < 0 || newIndex > userPlaylists.length) return;
-
-    final list = List<UserPlaylist>.from(userPlaylists);
-      if (newIndex > oldIndex) newIndex -= 1;
-      final moved = list.removeAt(oldIndex);
-      list.insert(newIndex, moved);
-      userPlaylists = list;
-      recomputeAllData();
-    notifyListeners();
-    unawaited(_saveUserPlaylists());
-  }
-
-  String _newPlaylistId() {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final rand = math.Random().nextInt(1 << 32);
-    return '${now}_$rand';
-  }
-
-  Future<UserPlaylist?> pickPlaylistOrCreate({
-    required List<int> songIdsToAdd,
-  }) async {
-     null;
-    final pickedId = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        return SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(ctx).size.height * 0.72,
-            ),
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.only(bottom: 12),
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 6, 16, 6),
-                  child: Text(
-                    'Add to playlist',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Divider(
-                    height: 1,
-                    color: cs.outlineVariant.withValues(alpha: 0.55),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.add_rounded),
-                  title: const Text('New playlist'),
-                  onTap: () => Navigator.pop(ctx, '__new__'),
-                ),
-                if (userPlaylists.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                    child: Text(
-                      'No playlists yet',
-                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  )
-                else
-                  ...userPlaylists.map(
-                    (p) => ListTile(
-                      leading: const Icon(Icons.playlist_play_rounded),
-                      title: Text(
-                        p.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text('${p.songIds.length} tracks'),
-                      onTap: () => Navigator.pop(ctx, p.id),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (pickedId == null) return null;
-    if (pickedId == '__new__') {
-      final ctx = navigatorKey.currentContext;
-      if (ctx == null || !ctx.mounted) return null;
-      return promptCreatePlaylist(
-        ctx,
-        onPlaylistCreated: createNewPlaylist,
-      );
-    }
-    for (final p in userPlaylists) {
-      if (p.id == pickedId) return p;
-    }
-    return null;
-  }
-
-  Future<bool> addSongsToPlaylistFlow(List<int> songIds) async {
-    if (songIds.isEmpty) return false;
-    final playlist = await pickPlaylistOrCreate(songIdsToAdd: songIds);
-    if (playlist == null) return false;
-
-    final idx = userPlaylists.indexWhere((p) => p.id == playlist.id);
-    if (idx == -1) return false;
-
-    final existing = userPlaylists[idx];
-    final existingSet = existing.songIds.toSet();
-    final updated = List<int>.from(existing.songIds);
-    var addedCount = 0;
-    for (final id in songIds) {
-      if (existingSet.add(id)) {
-        updated.add(id);
-        addedCount++;
-      }
-    }
-
-    if (addedCount == 0) {
-      showSnackBar(
-        SnackBar(
-          content: Text('All selected songs are already in "${existing.name}"'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return false;
-    }
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final newPlaylist = existing.copyWith(songIds: updated, updatedAtMs: now);
-    userPlaylists = List<UserPlaylist>.from(userPlaylists)
-        ..[idx] = newPlaylist;
-      recomputeAllData();
-    notifyListeners();
-    await _saveUserPlaylists();
-
-    showSnackBar(
-      SnackBar(
-        content: Text(
-          'Added $addedCount song${addedCount == 1 ? '' : 's'} to "${newPlaylist.name}"',
-        ),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    return true;
-  }
-
-
-
-  
-
-  
-
-  
 
   Future<void> ensureLibraryPermissionAndLoad({
     bool fromUserAction = false,
@@ -1282,114 +717,6 @@ class AppStateController extends ChangeNotifier {
     return songs;
   }
 
-  void updateSongMetadataInPlace(SongModel updatedSong) {
-    // 1. Update in songs list
-    final idx = songs.indexWhere(
-      (s) => s.id == updatedSong.id || s.data == updatedSong.data,
-    );
-    if (idx != -1) {
-      final newSongs = List<SongModel>.from(songs);
-      newSongs[idx] = updatedSong;
-      songs = newSongs;
-    }
-
-    // 2. Update in _controller.songs
-    final ctrlIdx = _controller.songs.indexWhere(
-      (s) => s.id == updatedSong.id || s.data == updatedSong.data,
-    );
-    if (ctrlIdx != -1) {
-      final newCtrlSongs = List<SongModel>.from(_controller.songs);
-      newCtrlSongs[ctrlIdx] = updatedSong;
-      _controller.songs = newCtrlSongs;
-    }
-
-    // 3. Update desktop scanner cache if running on desktop
-    if (!kIsWeb && defaultTargetPlatform != TargetPlatform.android) {
-      LocalAudioScanner.instance.updateCachedSong(
-        path: updatedSong.data,
-        song: updatedSong,
-      );
-    }
-
-    // 5. Recompute library structure, album/artist views, and refresh UI instantaneously
-    recomputeAllData();
-    
-    notifyListeners();
-  }
-
-  Future<void> runWithPlaybackSuspendedForTagWrite(
-    Future<void> Function() action, {
-    String? targetFilePath,
-  }) async {
-    final currentPlayingPath = _controller.currentSong?.data;
-    // If targetFilePath is specified and is NOT the song currently loaded in player,
-    // execute directly without interrupting playback!
-    if (targetFilePath != null &&
-        targetFilePath.isNotEmpty &&
-        currentPlayingPath != null &&
-        currentPlayingPath != targetFilePath) {
-      await action();
-      return;
-    }
-
-    final handler = audioHandler;
-    final shouldSuspend =
-        handler != null && handler.player == _controller.player;
-    final restoreSource = _controller.player.audioSource;
-    final hasLoaded =
-        _controller.player.processingState != ProcessingState.idle &&
-        restoreSource != null;
-    if (!hasLoaded) {
-      await action();
-      return;
-    }
-
-    final wasPlaying = _controller.player.playing;
-    final index = _controller.player.currentIndex;
-    final pos = _controller.player.position;
-
-    _controller.setSuppressIndexUpdates(true);
-    try {
-      pushAutoExitSuppress();
-      if (shouldSuspend) handler.setStateBroadcastSuspended(true);
-      await detachPlayerForTagWrite(_controller.player).timeout(
-        tagDetachTimeout,
-        onTimeout: () {
-          debugPrint('Timed out detaching player for tag write.');
-        },
-      );
-
-      await action().timeout(
-        tagWriteTimeout,
-        onTimeout: () {
-          throw TimeoutException('Tag write timed out. Please try again.');
-        },
-      );
-    } finally {
-      popAutoExitSuppress();
-      if (shouldSuspend) handler.setStateBroadcastSuspended(false);
-      try {
-        await restorePlayerAfterTagWrite(
-          _controller.player,
-          restoreSource,
-          index,
-          pos,
-          wasPlaying,
-        ).timeout(
-          tagRestoreTimeout,
-          onTimeout: () {
-            debugPrint('Timed out restoring playback after tag write.');
-          },
-        );
-      } catch (e, st) {
-        debugPrint('Failed to restore playback after tag write: $e');
-        debugPrintStack(stackTrace: st);
-      } finally {
-        _controller.setSuppressIndexUpdates(false);
-      }
-    }
-  }
-
   List<String> _extractFolders(List<SongModel> songs) {
     final Set<String> folders = {};
     for (final song in songs) {
@@ -1428,43 +755,6 @@ class AppStateController extends ChangeNotifier {
   Future<void> saveExcludedFolders(Set<String> folders) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_excludedFoldersKey, folders.toList());
-  }
-
-  void openAboutPage() {
-    context.pushNamed('about');
-  }
-
-  Future<void> confirmQuit() async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs = Theme.of(context).colorScheme;
-
-    final shouldQuit = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Quit app?'),
-          content: const Text('This will completely close the app.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: isDark ? cs.errorContainer : cs.error,
-                foregroundColor: isDark ? cs.onErrorContainer : cs.onError,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Quit'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldQuit == true) {
-      await PlatformExit.quit();
-    }
   }
 
   void openManageFoldersDialog() {
@@ -1549,267 +839,6 @@ class AppStateController extends ChangeNotifier {
     if (index < 0 || index >= songs.length) return;
     await checkNotificationPermission();
     await _controller.playSong(index);
-  }
-
-  
-
-
-
-  void showSongOptions(SongModel song, int index) {
-    showSongOptionsSheet(
-      context: context,
-      song: song,
-      index: index,
-      onEnterSelectionMode: (songId) =>
-          enterSelectionMode(initialSongId: songId),
-      onOpenNowPlaying: openNowPlaying,
-      onOpenAlbum: openAlbumPageFromSong,
-      onOpenArtist: openArtistPageFromSong,
-      onSongUpdated: updateSongMetadataInPlace,
-      runWithPlaybackSuspended: runWithPlaybackSuspendedForTagWrite,
-      onPlaySong: () => _controller.playSong(index),
-    );
-  }
-
-  Future<void> openNowPlaying(SongModel song) async {
-    
-    if (nowPlayingRouteActive) return;
-    final lastClosed = _lastNowPlayingClosedAt;
-    if (lastClosed != null &&
-        DateTime.now().difference(lastClosed) <
-            const Duration(milliseconds: 500)) {
-      return;
-    }
-
-    nowPlayingRouteActive = true;
-    try {
-      await Navigator.of(context).push(
-        PageRouteBuilder(
-          opaque: false,
-          barrierDismissible: false,
-          barrierColor: Colors.transparent,
-          barrierLabel: 'Now Playing',
-          transitionDuration: const Duration(milliseconds: 360),
-          reverseTransitionDuration: const Duration(milliseconds: 300),
-          pageBuilder: (_, _, _) => NowPlayingPage(
-            player: _controller.player,
-            song: song,
-            songs: songs,
-            onQueueChanged: (_) {},
-            onOpenAlbum: openAlbumPageFromSong,
-            onOpenArtist: openArtistPageFromSong,
-            onSongUpdated: updateSongMetadataInPlace,
-          ),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            final curve = CurveTween(curve: Curves.fastOutSlowIn);
-            final fade = Tween<double>(begin: 0.0, end: 1.0).chain(curve);
-
-            // When returning to the miniplayer (reverse transition / pop),
-            // fade out smoothly without sliding down so the gradient doesn't
-            // slide down awkwardly while the Hero artwork flies back into place.
-            if (animation.status == AnimationStatus.reverse) {
-              return FadeTransition(
-                opacity: animation.drive(fade),
-                child: child,
-              );
-            }
-
-            final slide = Tween<Offset>(
-              begin: const Offset(0.0, 1.0),
-              end: Offset.zero,
-            ).chain(curve);
-
-            return SlideTransition(
-              position: animation.drive(slide),
-              child: FadeTransition(
-                opacity: animation.drive(fade),
-                child: child,
-              ),
-            );
-          },
-        ),
-      );
-    } finally {
-      nowPlayingRouteActive = false;
-      _lastNowPlayingClosedAt = DateTime.now();
-    }
-  }
-
-  void openAlbumPageFromSong(SongModel song) {
-    final albumId = song.albumId;
-    if (albumId == null || albumId <= 0) return;
-
-    final albumTitle = (song.album ?? '').trim().isEmpty
-        ? 'Unknown Album'
-        : song.album!.trim();
-    final albumArtist =
-        (song.getMap["album_artist"]?.toString().trim().isNotEmpty ?? false)
-        ? song.getMap["album_artist"].toString().trim()
-        : ((song.artist ?? '').trim().isEmpty
-              ? 'Unknown Artist'
-              : song.artist!.trim());
-
-    // Use album identity key to group tracks with the same album artist + album
-    // name, even if MediaStore assigned different album IDs (e.g. guest features).
-    final targetKey = albumIdentityKey(song);
-    final albumSongs = songs
-        .where((s) => albumIdentityKey(s) == targetKey)
-        .toList();
-    albumSongs.sort(compareDiscAndTrack);
-
-    showInlineDetail(
-      AlbumPage(
-        player: _controller.player,
-        albumId: albumId,
-        albumTitle: albumTitle,
-        albumArtist: albumArtist,
-        songs: albumSongs,
-        librarySongs: songs,
-        onQueueChanged: (_) {},
-        selectedTabIndex: selectedTabIndex,
-        onNavigateTab: selectTab,
-        embeddedInHome: true,
-        onClose: closeInlineDetail,
-        onOpenNowPlaying: (s) {
-          if (nowPlayingRouteActive) {
-            Navigator.of(context).pop();
-            return;
-          }
-          openNowPlaying(s);
-        },
-        onPlaySong: (s) async {
-          final albumIndex = albumSongs.indexWhere((x) => x.id == s.id);
-          if (albumIndex == -1) return;
-          await _controller.playFromQueue(albumSongs, initialIndex: albumIndex);
-        },
-        onShuffle: () async {
-          if (albumSongs.isEmpty) return;
-          final shuffled = List<SongModel>.from(albumSongs)..shuffle();
-          await _controller.playFromQueue(shuffled, initialIndex: 0);
-        },
-      ),
-    );
-  }
-
-  void openArtistPageFromSong(SongModel song) {
-    final name = (song.artist ?? '').trim().isEmpty
-        ? 'Unknown Artist'
-        : song.artist!.trim();
-    openArtistPageByName(name);
-  }
-
-  void openArtistPageByName(String artistName) {
-    final normalizedArtist = artistName.trim();
-    if (normalizedArtist.isEmpty) return;
-
-    String norm(String? v) => (v ?? '').trim().toLowerCase();
-    final target = norm(normalizedArtist);
-
-    final artistSongs = songs
-        .where((s) {
-          final a = norm(s.artist);
-          final aa = norm(albumArtistFor(s));
-          return a == target || aa == target;
-        })
-        .toList(growable: false);
-
-    if (artistSongs.isEmpty) return;
-
-    // Group into albums by identity key (albumArtist + albumName) instead of
-    // raw MediaStore albumId to prevent fragmentation from guest features.
-    final Map<String, List<SongModel>> songsByAlbumKey = {};
-    for (final s in artistSongs) {
-      final key = albumIdentityKey(s);
-      (songsByAlbumKey[key] ??= <SongModel>[]).add(s);
-    }
-
-    final albums = <ArtistAlbum>[];
-    for (final entry in songsByAlbumKey.entries) {
-      final songs = entry.value;
-      songs.sort(compareDiscAndTrack);
-
-      final title = (songs.first.album ?? '').trim().isEmpty
-          ? 'Unknown Album'
-          : songs.first.album!.trim();
-      int year = 0;
-      for (final s in songs) {
-        final y = yearFromSong(s);
-        if (y > 0 && (year == 0 || y < year)) year = y;
-      }
-
-      int totalMs = 0;
-      for (final s in songs) {
-        totalMs += (s.duration ?? 0);
-      }
-
-      // Use the first song's albumId as the representative for artwork lookups.
-      final repAlbumId = songs.first.albumId ?? 0;
-
-      albums.add(
-        ArtistAlbum(
-          albumId: repAlbumId,
-          title: title,
-          year: year,
-          trackCount: songs.length,
-          totalDurationMs: totalMs,
-          representativeSong: songs.first,
-        ),
-      );
-    }
-
-    // Sort artist's albums chronologically by release year.
-    albums.sort((a, b) {
-      final ay = a.year == 0 ? 9999 : a.year;
-      final by = b.year == 0 ? 9999 : b.year;
-      final yc = ay.compareTo(by);
-      if (yc != 0) return yc;
-      final tc = a.title.toLowerCase().compareTo(b.title.toLowerCase());
-      if (tc != 0) return tc;
-      return a.albumId.compareTo(b.albumId);
-    });
-
-    // Build album songs lookup by identity key for Play All.
-    final albumKeyForAlbum = <int, String>{};
-    for (final entry in songsByAlbumKey.entries) {
-      final repId = entry.value.first.albumId ?? 0;
-      albumKeyForAlbum[repId] = entry.key;
-    }
-
-    showInlineDetail(
-      ArtistPage(
-        player: _controller.player,
-        artistName: normalizedArtist,
-        albums: albums,
-        librarySongs: songs,
-        onQueueChanged: (_) {},
-        selectedTabIndex: selectedTabIndex,
-        onNavigateTab: selectTab,
-        embeddedInHome: true,
-        onClose: closeInlineDetail,
-        onOpenNowPlaying: (s) {
-          if (nowPlayingRouteActive) {
-            Navigator.of(context).pop();
-            return;
-          }
-          openNowPlaying(s);
-        },
-        onOpenAlbum: (s) => openAlbumPageFromSong(s),
-        onPlayAll: albums.isEmpty
-            ? null
-            : () async {
-                final queue = <SongModel>[];
-                for (final a in albums) {
-                  final key = albumKeyForAlbum[a.albumId] ?? '';
-                  final list = songsByAlbumKey[key] ?? const <SongModel>[];
-                  final sorted = List<SongModel>.from(list);
-                  sorted.sort(compareDiscAndTrack);
-                  queue.addAll(sorted);
-                }
-                if (queue.isEmpty) return;
-                await _controller.playFromQueue(queue, initialIndex: 0);
-              },
-      ),
-    );
   }
 }
 
